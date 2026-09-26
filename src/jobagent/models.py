@@ -169,12 +169,19 @@ class SkillLine(Strict):
     items: str
 
 
+class Layout(Strict):
+    font: float = Field(default=1 / 3, ge=0, le=1)  # 0 = 9.5pt, 1/3 = 10pt, 1 = 11pt
+    spacing: float = Field(default=0.0, ge=0, le=1)  # 0 = compact, 1 = airy gaps between items/sections
+    stretch: bool = False  # spread any last leftover space between sections
+
+
 class ResumeDoc(Strict):
     contact: Contact
     education: list[Education]
     roles: list[DocEntry]
     projects: list[DocEntry] = Field(default_factory=list)
     skills: list[SkillLine]
+    layout: Layout = Field(default_factory=Layout)
 
 
 # --------------------------------------------------------------------------

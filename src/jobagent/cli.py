@@ -68,7 +68,11 @@ def check_resume(config: str = CONFIG):
     Bank.from_yaml(cfg.answer_bank())
     res = fit(master, [b.id for b in master.iter_bullets()])
     out = save_pdf(res.render, cfg.data_path / "master_preview.pdf")
-    typer.echo(f"pages={res.render.pages} fill={res.render.fill:.0%} bullets={len(res.included)} dropped={len(res.dropped)}")
+    lay = res.doc.layout
+    typer.echo(
+        f"pages={res.render.pages} content={res.natural_fill:.0%} of page, font={9.5 + 1.5 * lay.font:.1f}pt "
+        f"spacing={lay.spacing:.0%} bullets={len(res.included)} dropped={len(res.dropped)}"
+    )
     for w in res.warnings:
         typer.secho(f"  ! {w}", fg="yellow")
     typer.echo(f"preview: {out}")

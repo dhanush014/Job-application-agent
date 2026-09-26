@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from jobagent.config import load_master
 from jobagent.models import MasterResume
-from jobagent.resume.render import fit
+from jobagent.resume.render import build_doc, fit, render
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -15,11 +15,33 @@ def master_dict():
     return yaml.safe_load((ROOT / "profile.example/master_resume.yaml").read_text())
 
 
-def test_example_master_is_one_clean_page():
+def test_example_master_is_one_clean_full_page():
     m = load_master(ROOT / "profile.example/master_resume.yaml")
     r = fit(m, [b.id for b in m.iter_bullets()])
     assert r.render.pages == 1
-    assert not [w for w in r.warnings if "dangling" in w or "pages" in w or "extractable" in w]
+    assert r.warnings == []
+    assert r.natural_fill >= 0.95  # no big empty band at the bottom
+    assert not r.render.dangling() and r.render.lines_ok
+
+
+def test_renderer_sees_new_content_every_time():
+    m = load_master(ROOT / "profile.example/master_resume.yaml")
+    a = render(build_doc(m, ["stripe-1"]))
+    b = render(build_doc(m, ["airbnb-1"]))
+    assert "fraud" in a.text and "fraud" not in b.text
+
+
+def test_sparse_resume_is_not_stretched_into_huge_gaps():
+    d = master_dict()
+    d["roles"][0]["bullets"] = d["roles"][0]["bullets"][:3]
+    d["roles"][1]["bullets"] = d["roles"][1]["bullets"][:2]
+    d["projects"] = []
+    m = MasterResume.model_validate(d)
+    r = fit(m, [b.id for b in m.iter_bullets()])
+    assert r.render.pages == 1
+    assert not r.doc.layout.stretch
+    assert r.doc.layout.spacing == 1.0  # used all the spacing it is allowed
+    assert any("add more bullets" in w for w in r.warnings)
 
 
 def test_overfull_master_is_trimmed_to_one_page_keeping_top_ranked():

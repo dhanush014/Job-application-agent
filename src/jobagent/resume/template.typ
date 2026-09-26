@@ -1,42 +1,61 @@
 // Locked one-page resume template. The LLM never touches this file.
-// All content comes from data.json as plain strings (no markup injection).
-#let data = json("data.json")
+// All content comes from sys.inputs.data (JSON) as plain strings (no markup injection).
+//
+// data.layout.font (0..1) sets the type size (9.5pt -> 11pt); data.layout.spacing
+// (0..1) opens up the gaps between bullets, entries and sections. The fitter
+// uses both to fill the page, and data.layout.stretch spreads any last sliver
+// of leftover space between sections.
+#let data = json(bytes(sys.inputs.data))
+#let f = data.layout.font
+#let sp = data.layout.spacing
+#let fs = (9.5 + 1.5 * f) * 1pt
+#let k = 0.8 + 0.6 * f  // base spacing multiplier; 1.0 at the 10pt baseline
+#let lead = k * (1 + 0.3 * sp)   // line leading inside a bullet
+#let item = k * (1 + 0.9 * sp)   // between bullets
+#let gapk = k * (1 + 1.4 * sp)   // between entries and around section headings
 
 #set document(title: data.contact.name + " - Resume", author: data.contact.name)
 #set page(paper: "us-letter", margin: (x: 0.5in, top: 0.45in, bottom: 0.45in))
-#set text(font: "New Computer Modern", size: 10pt, lang: "en", hyphenate: false)
-#set par(justify: false, leading: 0.48em, spacing: 0.48em)
-#set list(indent: 0.4em, body-indent: 0.45em, spacing: 0.42em, marker: [•])
+#set text(font: "New Computer Modern", size: fs, lang: "en", hyphenate: false)
+#set par(justify: false, leading: 0.48em * lead, spacing: 0.48em * item)
+#set list(indent: 0.4em, body-indent: 0.45em, spacing: 0.42em * item, marker: [•])
+
+#let gap() = if data.layout.stretch { v(1fr) }
 
 #let section(title) = block(
-  width: 100%, above: 0.85em, below: 0.45em,
+  width: 100%, above: 0.85em * gapk, below: 0.45em * gapk,
   stroke: (bottom: 0.5pt), inset: (bottom: 2.5pt),
-  text(size: 10.5pt, weight: "bold", upper(title)),
+  text(size: fs + 0.5pt, weight: "bold", upper(title)),
 )
 
 #let entry(heading, dates, sub, loc, bullets) = {
-  block(above: 0.62em, below: 0em, breakable: true)[
+  block(above: 0.62em * gapk, below: 0em, breakable: true)[
     #grid(
       columns: (1fr, auto),
       align: (left, right),
-      row-gutter: 0.36em,
+      row-gutter: 0.36em * k,
       text(weight: "bold", heading), text(dates),
       if sub != "" { emph(sub) }, if loc != "" { emph(loc) },
     )
     #if bullets.len() > 0 {
-      v(0.08em)
+      v(0.08em * k)
       list(..bullets.map(b => [#b]))
     }
   ]
 }
 
+#let contact-line = {
+  let parts = (data.contact.location, data.contact.phone, link("mailto:" + data.contact.email, data.contact.email))
+  parts = parts + data.contact.links.map(l => link(l.url, l.label))
+  text(size: fs - 0.5pt, parts.map(p => box(p)).join([ #h(0.2em)|#h(0.2em) ]))
+}
+#let skill-line(sk) = [#text(weight: "bold", sk.category + ": ")#sk.items]
+
 // ---- Header ----
 #align(center)[
-  #text(size: 17pt, weight: "bold", data.contact.name)
+  #text(size: fs * 1.7, weight: "bold", data.contact.name)
   #v(-0.35em)
-  #let parts = (data.contact.location, data.contact.phone, link("mailto:" + data.contact.email, data.contact.email))
-  #let parts = parts + data.contact.links.map(l => link(l.url, l.label))
-  #text(size: 9.5pt, parts.map(p => box(p)).join([ #h(0.2em)|#h(0.2em) ]))
+  #contact-line
 ]
 
 // ---- Education ----
@@ -47,6 +66,7 @@
 }
 
 // ---- Experience ----
+#gap()
 #section("Experience")
 #for r in data.roles {
   entry(r.heading, r.dates, r.subheading, r.location, r.bullets)
@@ -54,6 +74,7 @@
 
 // ---- Projects ----
 #if data.projects.len() > 0 {
+  gap()
   section("Projects")
   for p in data.projects {
     entry(p.heading, p.dates, p.subheading, p.location, p.bullets)
@@ -61,21 +82,27 @@
 }
 
 // ---- Skills ----
+#gap()
 #section("Skills")
-#for s in data.skills {
-  block(above: 0.4em, below: 0em)[#text(weight: "bold", s.category + ": ")#s.items]
+#for sk in data.skills {
+  block(above: 0.4em * item, below: 0em, skill-line(sk))
 }
 
-// Markers used by the fitter: how full the page is, and how many lines each
-// bullet wraps to (width / available width, in document order).
+// Markers used by the fitter: where the content ends, and how wide each line
+// is relative to the space available (>1 means it wraps).
 #context [#metadata(here().position()) <end>]
 #context {
-  let avail = page.width - 1in - 0.85 * text.size - measure([•]).width
-  let ratios = ()
+  let full = page.width - 1in
+  let avail = full - 0.85 * text.size - measure([•]).width
+  let bullets = ()
   for grp in (data.roles, data.projects) {
     for e in grp {
-      for b in e.bullets { ratios.push(measure([#b]).width / avail) }
+      for b in e.bullets { bullets.push(measure([#b]).width / avail) }
     }
   }
-  [#metadata(ratios) <widths>]
+  [#metadata((
+    bullets: bullets,
+    header: measure(contact-line).width / full,
+    skills: data.skills.map(sk => measure(skill-line(sk)).width / full),
+  )) <widths>]
 }

@@ -19,10 +19,15 @@ The LLM never touches layout.
 
 1. **Strict schema.** `profile/master_resume.yaml` is validated by pydantic (`src/jobagent/models.py`). It rejects unknown keys, duplicate bullet ids, bullets over 200 characters, contact lines that would wrap, and more.
 2. **The LLM only ranks and rephrases.** It returns `{source_id, text, relevance}` for each master bullet. A validator (`tailor.py`) reverts any rewrite that invents a number, adds a job-description keyword the original bullet doesn't back up, or contains placeholder text.
-3. **Code fits the page.** Every role keeps its `min_bullets`. The fitter then adds the highest-ranked bullets and uses binary search on the actual rendered PDF to find the most bullets that still fit on one page (`resume/render.py`).
+3. **Code fits the page, and fills it.** Every role keeps its `min_bullets`. The fitter then adds the highest-ranked bullets at 10pt, using binary search on the actual rendered PDF to find the most that still fit on one page. After that, it fills whatever space is left:
+   - It enlarges the type, up to 11pt, but only if that doesn't make any bullet wrap onto a short dangling line.
+   - It widens the gaps between bullets, entries and sections until the page is full.
+   - It spreads any last sliver evenly between sections. It won't do this when a thin resume would end up with huge gaps; `check-resume` tells you to add bullets instead.
+
+   If the required content doesn't fit at 10pt, the type can shrink to 9.5pt.
 4. **Locked template.** `resume/template.typ` uses fixed fonts, margins and spacing, and treats all content as plain strings, so no markup can be injected.
 5. **Checks on the PDF itself:**
-   - It has exactly one page.
+   - It has exactly one page, and the contact line and skill lines never wrap.
    - The name and every bullet can be extracted as text, so ATS software can parse it.
    - Rewrites that leave a one-word dangling last line are reverted to the master wording.
 
