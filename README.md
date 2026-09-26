@@ -68,14 +68,15 @@ Groq's model line-up changes over time. If a run fails with a model error, run `
 The simplest way to use this, and the most reliable, because nothing has to drive a web form:
 
 ```bash
-jobagent shortlist --limit 20          # search companies.yaml
+jobagent shortlist                     # 10 best matches from companies.yaml
 jobagent shortlist <job-link> <job-link>   # or specific postings
 ```
 
 It writes a folder (`data/shortlist/<date>/`) containing a **resume tailored to each posting** and an `index.html` listing every job with:
 - the link to the posting, and its fit score and summary
-- its tailored resume PDF (and cover letter, if the form wants one)
+- its tailored resume as **PDF and editable Word**, named `<you>_resume_<company>`
 - the answers to copy into the form, with anything it can't answer flagged
+- a **Yes, I applied** button; the page remembers what you've done and shows your progress
 
 Open `index.html`, work down the list, apply. No Playwright, no CAPTCHAs, nothing submitted on your behalf. If you only ever use this command, you can install without the browser: `pip install -e .`
 

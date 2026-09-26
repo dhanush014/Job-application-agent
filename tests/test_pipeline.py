@@ -169,8 +169,11 @@ def test_shortlist_builds_a_folder_with_links_and_resumes(cfg, store, tmp_path):
         assert a.title in page                  # what the job is
     pdfs = sorted(q.name for q in out.glob("*.pdf"))
     assert len(pdfs) >= len(apps)               # a tailored resume per job
-    assert pdfs[0].startswith("01_")            # ranked best-first
-    assert all(Path(a.resume_pdf).exists() for a in apps)
+    assert all(p.startswith("alex_rivera_resume_") for p in pdfs)  # easy to save
+    assert sorted(q.name for q in out.glob("*.docx"))              # editable copy too
+    assert all(Path(a.resume_pdf).exists() and Path(a.resume_docx).exists() for a in apps)
+    # best-scoring job appears first in the page, whatever the filenames are
+    assert page.index(apps[0].title) <= min(page.index(a.title) for a in apps)
 
 
 def test_shortlist_from_specific_links(cfg, store, tmp_path):

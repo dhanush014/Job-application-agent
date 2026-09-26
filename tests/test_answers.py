@@ -88,3 +88,31 @@ def test_salary_uses_posted_range_else_default():
     without, _ = answer_form([f], bank, M, FakeLLM(), "SWE", "Acme", "No pay info.")
     assert with_range[0].value == "$130,000 – $170,000"
     assert without[0].value == "$120,000"
+
+
+def test_open_questions_are_written_once_then_remembered(tmp_path):
+    from jobagent.answers import AnswerCache
+
+    cache = AnswerCache(tmp_path / "learned.yaml")
+    q = FormField(name="q1", label="Tell us about a project you are proud of.",
+                  type=FieldType.TEXTAREA, required=False)  # optional, still worth answering
+    llm = FakeLLM()
+    first, _ = answer_form([q], BANK, M, llm, "AI Engineer", "Acme", "jd", cache=cache)
+    assert first[0].value and first[0].source == "llm"
+    assert "WrittenOutput" in llm.calls
+
+    reused = AnswerCache(tmp_path / "learned.yaml")      # a later run, fresh process
+    llm2 = FakeLLM()
+    again, _ = answer_form([q], BANK, M, llm2, "AI Engineer", "Other Co", "jd", cache=reused)
+    assert again[0].value == first[0].value
+    assert again[0].source == "learned"
+    assert "WrittenOutput" not in llm2.calls          # no second call to the model
+
+
+def test_cover_letters_are_not_cached_across_jobs(tmp_path):
+    from jobagent.answers import AnswerCache
+
+    cache = AnswerCache(tmp_path / "learned.yaml")
+    f = FormField(name="cover_letter", label="Cover Letter", type=FieldType.TEXTAREA, required=True)
+    answer_form([f], BANK, M, FakeLLM(), "AI Engineer", "Acme", "jd", cache=cache)
+    assert cache.get("Cover Letter") is None  # must stay per-company

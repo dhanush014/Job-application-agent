@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 from pydantic import BaseModel, Field
+import yaml
 from rapidfuzz import fuzz, process
 
 from .llm import LLM, untrusted
@@ -102,6 +104,39 @@ def pick_option(answer: str, options: list[Option]) -> Option | None:
     return None
 
 
+class AnswerCache:
+    """Answers the model wrote, kept so the same question is never re-answered
+    (and never costs tokens twice). Plain YAML: edit or delete any of it."""
+
+    def __init__(self, path: Path | None = None):
+        self.path = Path(path) if path else None
+        self.entries: dict[str, str] = {}
+        self._dirty = False
+        if self.path and self.path.exists():
+            data = yaml.safe_load(self.path.read_text()) or {}
+            self.entries = {_norm(k): str(v) for k, v in (data.get("answers") or {}).items()}
+
+    def get(self, label: str) -> str | None:
+        return self.entries.get(_norm(label))
+
+    def put(self, label: str, value: str) -> None:
+        key = _norm(label)
+        if key and value and self.entries.get(key) != value:
+            self.entries[key] = value
+            self._dirty = True
+
+    def save(self) -> None:
+        if not (self.path and self._dirty):
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(
+            "# Answers the agent wrote for open questions ('why us', 'a project you\'re proud of').\n"
+            "# Reused whenever the same question comes up again. Edit or delete freely.\n"
+            + yaml.safe_dump({"answers": self.entries}, sort_keys=True, allow_unicode=True, width=100)
+        )
+        self._dirty = False
+
+
 @dataclass
 class Bank:
     profile: dict
@@ -171,6 +206,8 @@ option(s) that truthfully describe the candidate based ONLY on their profile. If
 does not tell you, give confidence below 50. Use option labels exactly as given."""
 
 WRITE_SYSTEM = """You write answers to job application questions for the candidate, in first person.
+For open questions ("a project you are proud of", "why this company", "what interests you"), choose the
+most fitting real project or role from the profile and answer with conviction and specifics.
 Rules: only use facts from the candidate profile; never invent experience, numbers or employers;
 be specific, warm and concise (short text fields: under 20 words; long answers: 60-150 words);
 no placeholders, no brackets, no mention of being an AI. If a question cannot be answered from
@@ -214,6 +251,7 @@ def answer_form(
     company: str,
     jd: str,
     cover_policy: str = "when_asked",
+    cache: "AnswerCache | None" = None,
 ) -> tuple[list[Answer], bool]:
     """Returns (answers, needs_cover_letter)."""
     answers: list[Answer] = []
@@ -270,14 +308,25 @@ def answer_form(
         if f.type in (FieldType.SELECT, FieldType.MULTISELECT, FieldType.BOOLEAN):
             if f.required:
                 need_choice.append((i, f))
-        elif f.required:
-            need_text.append((i, f))
+        elif f.required or f.type == FieldType.TEXTAREA:
+            # long answers are the "why us / a project you're proud of" ones: worth
+            # writing even when optional, but only once — after that they're reused
+            if cache and (remembered := cache.get(f.label)):
+                a.value, a.source, a.confidence = remembered, "learned", 95
+            else:
+                need_text.append((i, f))
 
     profile = _profile_text(master, bank)
     if need_choice:
         _llm_choices(llm, answers, need_choice, profile, job_title, company)
     if need_text:
         _llm_written(llm, answers, need_text, profile, job_title, company, jd)
+        if cache:
+            for i, f in need_text:
+                a = answers[i]
+                if isinstance(a.value, str) and a.confidence >= 70 and not _is_cover(f):
+                    cache.put(f.label, a.value)
+            cache.save()
     return answers, needs_cover
 
 

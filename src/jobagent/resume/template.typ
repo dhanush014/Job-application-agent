@@ -32,7 +32,8 @@
   block(above: 0.62em * gapk, below: 0em, breakable: true)[
     #let cells = (text(weight: "bold", heading), text(dates))
     // second line (title / location) only when there is something to show
-    #if sub != "" or loc != "" { cells += (emph(sub), emph(loc)) }
+    // never italic: some ATS parsers drop or garble italic runs
+    #if sub != "" or loc != "" { cells += (text(sub), text(loc)) }
     #grid(
       columns: (1fr, auto),
       align: (left, right),

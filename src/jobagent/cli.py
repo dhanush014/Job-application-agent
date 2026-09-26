@@ -145,7 +145,7 @@ def discover(config: str = CONFIG, verbose: bool = False):
 def shortlist(
     urls: list[str] = typer.Argument(None, help="Specific job links (default: search companies.yaml)"),
     config: str = CONFIG,
-    limit: int = typer.Option(20, help="How many jobs to tailor a resume for"),
+    limit: int = typer.Option(10, help="How many jobs to tailor a resume for"),
     out: Path = typer.Option(None, help="Where to write the folder (default: data/shortlist/<date>)"),
     verbose: bool = False,
 ):

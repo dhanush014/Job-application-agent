@@ -34,17 +34,30 @@ def test_answers_table_flags_what_you_must_fill_in(tmp_path):
     assert "Tailored resume PDF" in page
 
 
-def test_jobs_are_ranked_and_pdfs_copied(tmp_path):
-    pdf = tmp_path / "src.pdf"
+def test_jobs_are_ranked_and_both_formats_copied(tmp_path):
+    pdf = tmp_path / "dhanush_sathyan_resume_acme.pdf"
     pdf.write_bytes(b"%PDF-1.4 fake")
-    low = app(job_key="k2", job_id="2", title="Backend Engineer", score=70, resume_pdf=str(pdf))
-    high = app(score=95, resume_pdf=str(pdf))
+    docx = tmp_path / "dhanush_sathyan_resume_acme.docx"
+    docx.write_bytes(b"PK fake docx")
+    low = app(job_key="k2", job_id="2", title="Backend Engineer", score=70,
+              resume_pdf=str(pdf), resume_docx=str(docx))
+    high = app(score=95, resume_pdf=str(pdf), resume_docx=str(docx))
     out = tmp_path / "out"
     page = export_shortlist([low, high], out).read_text()
     assert page.index("AI Engineer") < page.index("Backend Engineer")  # best first
-    names = sorted(q.name for q in out.glob("*.pdf"))
-    assert names[0].startswith("01_Acme-Inc_AI-Engineer")
-    assert (out / names[0]).read_bytes() == b"%PDF-1.4 fake"
+    names = sorted(q.name for q in out.iterdir())
+    assert "dhanush_sathyan_resume_acme.pdf" in names
+    assert "dhanush_sathyan_resume_acme.docx" in names
+    # a second role at the same company must not overwrite the first
+    assert "dhanush_sathyan_resume_acme_2.pdf" in names
+    assert (out / "dhanush_sathyan_resume_acme.pdf").read_bytes() == b"%PDF-1.4 fake"
+
+
+def test_applied_tracking_is_wired_to_each_job(tmp_path):
+    page = export_shortlist([app(), app(job_key="k2", job_id="2", title="Backend Engineer")], tmp_path).read_text()
+    assert page.count("data-mark type") == 2     # a Yes button per job
+    assert "data-key='greenhouse:acme:1'" in page  # keyed so the state survives a reload
+    assert "localStorage" in page and "0 of 2 applied" in page
 
 
 def test_empty_shortlist_is_still_a_readable_page(tmp_path):

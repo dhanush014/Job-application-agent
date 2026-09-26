@@ -10,13 +10,21 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import policy
-from .answers import Bank, answer_form, is_cover_answer, review_reasons, write_cover_letter
+from .answers import AnswerCache, Bank, answer_form, is_cover_answer, review_reasons, write_cover_letter
 from .apply.browser import Files, SubmitResult, Submitter
 from .config import Config
 from .discovery import fetch_all, fetch_form, job_from_url, make_client
 from .llm import LLM, LLMRateLimited
 from .models import Application, FieldType, Status
-from .resume.render import ResumeDoesNotFit, doc_bullets, fit, render_cover_letter, save_pdf
+from .resume.docx import write_docx
+from .resume.render import (
+    ResumeDoesNotFit,
+    doc_bullets,
+    fit,
+    render_cover_letter,
+    resume_filename,
+    save_pdf,
+)
 from .scoring import rule_filter, score_job
 from .store import Store
 from .store.export import export_xlsx
@@ -48,6 +56,7 @@ class Pipeline:
         self.http = http or make_client()
         self.master = cfg.master_resume()
         self._bank: Bank | None = None
+        self._cache: AnswerCache | None = None
         self._submitter = submitter
         self._listed: set[str] | None = None  # job keys seen in the latest discovery
 
@@ -56,6 +65,13 @@ class Pipeline:
         if self._bank is None:
             self._bank = Bank.from_yaml(self.cfg.answer_bank())
         return self._bank
+
+    @property
+    def answer_cache(self) -> AnswerCache:
+        """Written answers are kept next to your profile so they are reused."""
+        if self._cache is None:
+            self._cache = AnswerCache(self.cfg.path(self.cfg.profile_dir) / "learned_answers.yaml")
+        return self._cache
 
     @property
     def submitter(self) -> Submitter:
@@ -163,10 +179,15 @@ class Pipeline:
             fr = fit(self.master, [b.id for b in self.master.iter_bullets()], style=self.cfg.resume_style())
         hard = [w for w in fr.warnings if "pages" in w or "extractable" in w]
         reasons += [f"resume check failed: {w}" for w in hard]
-        pdf = save_pdf(fr.render, out_dir / "resume.pdf")
+        stem = resume_filename(self.master.contact.name, job.company_name)
+        pdf = save_pdf(fr.render, out_dir / f"{stem}.pdf")
         self.store.upload(pdf, f"{app.id}/resume.pdf")
         app.resume_json = fr.doc.model_dump(mode="json")
         app.resume_pdf = str(pdf)
+        try:
+            app.resume_docx = str(write_docx(fr.doc, out_dir / f"{stem}.docx"))
+        except Exception as e:  # the PDF is what gets submitted; .docx is a convenience
+            log.warning("could not write the editable .docx: %s", e)
 
         # 2. form
         try:
@@ -178,6 +199,7 @@ class Pipeline:
         answers, needs_cover = answer_form(
             fields, self.bank, self.master, self.llm, job.title, job.company_name, job.description,
             cover_policy=self.cfg.apply.cover_letter,
+            cache=self.answer_cache,
         )
         app.answers = answers
         if needs_cover:
@@ -354,7 +376,7 @@ class Pipeline:
     def shortlist(
         self,
         urls: list[str] | None = None,
-        limit: int = 20,
+        limit: int = 10,
         out_dir: Path | None = None,
     ) -> tuple[Path, list[Application]]:
         """Prepare jobs and write a folder to work through by hand: the posting

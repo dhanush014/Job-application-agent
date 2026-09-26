@@ -463,6 +463,14 @@ def _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold, excl
     )
 
 
+def resume_filename(person: str, company: str) -> str:
+    """e.g. dhanush_sathyan_resume_openai — easy to spot in a Downloads folder."""
+    def part(text: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "_", unicodedata.normalize("NFKD", text).lower()).strip("_")
+
+    return f"{part(person)}_resume_{part(company)}".strip("_")
+
+
 def save_pdf(result: RenderResult, path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(result.pdf)

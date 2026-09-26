@@ -262,7 +262,16 @@ class FormField(BaseModel):
     eeo: bool = False
 
 
-AnswerSource = Literal["profile", "bank", "llm", "llm_choice", "file", "user", "none"]
+AnswerSource = Literal[
+    "profile",     # straight from your profile (name, email, links)
+    "bank",        # your answers.yaml
+    "learned",     # written for an earlier job and remembered
+    "llm",         # written just now
+    "llm_choice",  # an option the model picked
+    "file",        # a resume or cover letter upload
+    "user",        # you typed it in the dashboard
+    "none",
+]
 
 
 class Answer(BaseModel):
@@ -316,6 +325,7 @@ class Application(BaseModel):
     review_reasons: list[str] = Field(default_factory=list)
     resume_json: dict | None = None
     resume_pdf: str | None = None
+    resume_docx: str | None = None  # same content, editable
     cover_letter: str | None = None
     cover_letter_pdf: str | None = None
     answers: list[Answer] = Field(default_factory=list)
