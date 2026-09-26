@@ -1,0 +1,13 @@
+# Dependencies for the hosted dashboard on Vercel (no browser: the worker submits).
+pydantic>=2.6
+pyyaml>=6
+httpx>=0.27
+groq>=0.9
+typst>=0.13
+pypdf>=4
+rapidfuzz>=3
+fastapi>=0.110
+jinja2>=3.1
+python-multipart>=0.0.9
+openpyxl>=3.1
+supabase>=2.4

@@ -27,6 +27,10 @@ class Store(ABC):
     def upload(self, local: Path, key: str) -> None:
         """Mirror a file (resume, screenshot) to remote storage. No-op locally."""
 
+    def download(self, key: str) -> bytes | None:
+        """Fetch a mirrored file (None when there is no remote storage)."""
+        return None
+
     def count_applied_since(self, since: datetime) -> int:
         return sum(1 for a in self.list([Status.APPLIED]) if a.applied_at and a.applied_at >= since)
 

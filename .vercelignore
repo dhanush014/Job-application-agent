@@ -1,0 +1,7 @@
+/.venv
+/tests
+/data
+/profile
+/profile.example
+/supabase
+/*.md

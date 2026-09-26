@@ -84,15 +84,20 @@ class Config(BaseModel):
         d.mkdir(parents=True, exist_ok=True)
         return d
 
+    def _yaml(self, env: str, path: Path) -> dict:
+        """Read a YAML file, or its contents from an env var (hosted: no files)."""
+        text = os.environ.get(env)
+        return yaml.safe_load(text if text is not None else path.read_text()) or {}
+
     def master_resume(self) -> MasterResume:
-        return load_master(self.path(self.profile_dir) / "master_resume.yaml")
+        data = self._yaml("JOBAGENT_MASTER_RESUME", self.path(self.profile_dir) / "master_resume.yaml")
+        return MasterResume.model_validate(data)
 
     def answer_bank(self) -> dict:
-        p = self.path(self.profile_dir) / "answers.yaml"
-        return yaml.safe_load(p.read_text()) or {}
+        return self._yaml("JOBAGENT_ANSWERS", self.path(self.profile_dir) / "answers.yaml")
 
     def companies(self) -> list["Company"]:
-        data = yaml.safe_load(self.path(self.companies_file).read_text()) or {}
+        data = self._yaml("JOBAGENT_COMPANIES", self.path(self.companies_file))
         return [Company.model_validate(c) for c in data.get("companies", [])]
 
 
@@ -121,7 +126,12 @@ def load_config(path: str | Path = "config.yaml") -> Config:
     path = Path(path)
     root = path.parent.resolve()
     load_dotenv(root / ".env")
-    raw = yaml.safe_load(path.read_text()) if path.exists() else {}
+    if os.environ.get("JOBAGENT_CONFIG") is not None:  # hosted: config.yaml contents in an env var
+        raw = yaml.safe_load(os.environ["JOBAGENT_CONFIG"])
+    else:
+        raw = yaml.safe_load(path.read_text()) if path.exists() else {}
     cfg = Config.model_validate(raw or {})
     cfg.root = root
+    if os.environ.get("JOBAGENT_DATA_DIR"):  # e.g. /tmp on read-only serverless filesystems
+        cfg.data_dir = os.environ["JOBAGENT_DATA_DIR"]
     return cfg

@@ -103,14 +103,30 @@ def run(config: str = CONFIG, submit: bool = typer.Option(True, help="Submit REA
 
 
 @app.command()
-def loop(config: str = CONFIG, every_minutes: int = 120, verbose: bool = False):
-    """Run forever, every N minutes (a free alternative to cron)."""
+def worker(
+    config: str = CONFIG,
+    every_minutes: int = typer.Option(120, help="Full discover/prepare/submit run every N minutes"),
+    poll_seconds: int = typer.Option(60, help="How often to pick up Apply clicks from the hosted dashboard"),
+    verbose: bool = False,
+):
+    """Run forever: a full run every N minutes, plus hosted-dashboard clicks within a minute."""
+    _setup_logging(verbose)
+    p = _pipeline(config)
+    last_run = 0.0
     while True:
         try:
-            run(config=config, submit=True, verbose=verbose)
-        except Exception as e:  # keep looping
-            typer.secho(f"run failed: {e}", fg="red")
-        time.sleep(every_minutes * 60)
+            if time.time() - last_run >= every_minutes * 60:
+                last_run = time.time()
+                s = p.run()
+                typer.echo(f"run: new={s.discovered_new} ready={s.ready} review={s.needs_review} submitted={s.submitted}")
+            else:
+                s = p.process_queue()
+                if s.submitted or s.needs_review:
+                    p.export()
+                    typer.echo(f"queue: submitted={s.submitted} review={s.needs_review}")
+        except Exception as e:  # keep the worker alive
+            typer.secho(f"worker error: {e}", fg="red")
+        time.sleep(poll_seconds)
 
 
 @app.command()

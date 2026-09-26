@@ -45,6 +45,7 @@ create table if not exists applications (
   screenshot text,
   error text,
   attempt int default 1,
+  request text,                 -- "prepare" / "reapply" asked for from the hosted dashboard
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
   applied_at timestamptz        -- date applied
@@ -56,3 +57,6 @@ create index if not exists applications_job on applications(job_key);
 -- Keep the tables private: the agent uses the service role key.
 alter table jobs enable row level security;
 alter table applications enable row level security;
+
+-- Upgrading an existing database from an earlier version:
+alter table applications add column if not exists request text;

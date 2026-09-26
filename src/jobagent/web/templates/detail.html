@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ a.title }} · {{ a.company_name }}{% endblock %}
-{% block head %}{% if a.status.value == 'applying' %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
+{% block head %}{% if a.status.value in ('applying', 'queued') or a.request %}<meta http-equiv="refresh" content="15">{% endif %}{% endblock %}
 {% block sub %}<span class="status {{ a.status.value }}">{{ a.status.value.replace('_', ' ') }}</span>{% endblock %}
 {% block body %}
 <div class="panel">
@@ -22,6 +22,10 @@
     <button class="btn primary" formaction="/a/{{ a.id }}/apply">Apply</button>
     <button class="btn" formaction="/a/{{ a.id }}/save">Save answers</button>
   {% endif %}
+  {% if a.status.value in ('needs_review', 'ready', 'dry_run', 'failed', 'queued') %}
+    <button class="btn" formaction="/a/{{ a.id }}/mark-applied"
+            onclick="return confirm('Mark as applied? Use this after applying yourself on the posting page.')">Mark as applied</button>
+  {% endif %}
   {% if a.status.value in ('low_fit', 'filtered', 'failed') %}
     <button class="btn" formaction="/a/{{ a.id }}/prepare">Prepare anyway</button>
   {% endif %}
@@ -33,6 +37,8 @@
   {% endif %}
   {% if a.screenshot %}<a class="btn" href="/a/{{ a.id }}/screenshot.png" target="_blank">Last screenshot</a>{% endif %}
   {% if a.status.value == 'applying' %}<span class="muted">Applying… this page refreshes itself.</span>{% endif %}
+  {% if a.status.value == 'queued' %}<span class="muted">Queued: the worker will submit this within a minute or two.</span>{% endif %}
+  {% if a.request %}<span class="muted">Waiting for the worker to {{ 'prepare' if a.request == 'prepare' else 're-apply to' }} this job…</span>{% endif %}
 </div>
 
 <div class="grid">

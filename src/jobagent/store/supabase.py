@@ -55,6 +55,12 @@ class SupabaseStore(Store):
             key, local.read_bytes(), {"content-type": ctype, "upsert": "true"}
         )
 
+    def download(self, key: str) -> bytes | None:
+        try:
+            return self.db.storage.from_(self.bucket).download(key)
+        except Exception:
+            return None
+
     @staticmethod
     def _all(query, limit: int = 100_000) -> list[dict]:
         out, page = [], 1000

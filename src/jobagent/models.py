@@ -265,6 +265,7 @@ class Status(str, Enum):
     NEEDS_REVIEW = "needs_review"  # fully prepared, a gate wants a human look
     READY = "ready"  # fully prepared, passes every gate, will auto-submit
     DRY_RUN = "dry_run"  # form filled successfully but submit was not clicked
+    QUEUED = "queued"  # you clicked Apply on the hosted dashboard; the worker will submit it
     APPLYING = "applying"
     APPLIED = "applied"
     FAILED = "failed"
@@ -302,6 +303,8 @@ class Application(BaseModel):
     screenshot: str | None = None
     error: str | None = None
     attempt: int = 1
+    # work the hosted dashboard asked the worker to do ("prepare" / "reapply")
+    request: Literal["prepare", "reapply"] | None = None
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
     applied_at: datetime | None = None

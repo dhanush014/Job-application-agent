@@ -39,15 +39,22 @@ class RunStats:
 
 
 class Pipeline:
-    def __init__(self, cfg: Config, store: Store, llm: LLM, http=None, submitter: Submitter | None = None):
+    def __init__(self, cfg: Config, store: Store, llm: LLM | None, http=None, submitter: Submitter | None = None):
+        """`llm` may be None for the hosted dashboard, which never calls it."""
         self.cfg = cfg
         self.store = store
         self.llm = llm
         self.http = http or make_client()
         self.master = cfg.master_resume()
-        self.bank = Bank.from_yaml(cfg.answer_bank())
+        self._bank: Bank | None = None
         self._submitter = submitter
         self._listed: set[str] | None = None  # job keys seen in the latest discovery
+
+    @property
+    def bank(self) -> Bank:
+        if self._bank is None:
+            self._bank = Bank.from_yaml(self.cfg.answer_bank())
+        return self._bank
 
     @property
     def submitter(self) -> Submitter:
@@ -232,12 +239,33 @@ class Pipeline:
                 stats.needs_review += 1
         return stats
 
+    def _local_file(self, app: Application, recorded: str | None, name: str) -> Path | None:
+        """The PDF on this machine, downloading it from remote storage if the
+        application was prepared elsewhere (e.g. another worker run)."""
+        if recorded and Path(recorded).exists():
+            return Path(recorded)
+        if not recorded:
+            return None
+        data = self.store.download(f"{app.id}/{name}")
+        if data is None:
+            return None
+        path = self.cfg.data_path / "applications" / app.id / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        return path
+
     def submit(self, app: Application, *, headless: bool, dry_run: bool) -> SubmitResult:
         app.status = Status.APPLYING
         self.store.save(app)
+        resume = self._local_file(app, app.resume_pdf, "resume.pdf")
+        if resume is None:
+            app.status, app.error = Status.NEEDS_REVIEW, "resume PDF not found"
+            app.review_reasons = ["resume PDF not found; use Prepare anyway to rebuild it"]
+            self.store.save(app)
+            return SubmitResult("error", "resume PDF not found")
         files = Files(
-            resume=Path(app.resume_pdf) if app.resume_pdf else Path("missing.pdf"),
-            cover_letter=Path(app.cover_letter_pdf) if app.cover_letter_pdf else None,
+            resume=resume,
+            cover_letter=self._local_file(app, app.cover_letter_pdf, "cover_letter.pdf"),
         )
         res = self.submitter.submit(app, files, headless=headless, dry_run=dry_run)
         app.screenshot = res.screenshot
@@ -255,6 +283,42 @@ class Pipeline:
                 log.warning("screenshot upload failed", exc_info=True)
         self.store.save(app)
         return res
+
+    def mark_applied(self, app: Application, note: str = "applied by hand") -> None:
+        app.status, app.applied_at, app.error = Status.APPLIED, datetime.now(timezone.utc), None
+        app.review_reasons = [note]
+        self.store.save(app)
+
+    def process_queue(self, stats: RunStats | None = None) -> RunStats:
+        """Work the hosted dashboard asked for: queued Apply clicks (these skip
+        the daily limit, you asked for them) and prepare / re-apply requests."""
+        stats = stats or RunStats()
+        for app in self.store.list():
+            if not app.request:
+                continue
+            req, app.request = app.request, None
+            self.store.save(app)
+            try:
+                if req == "prepare":
+                    self.prepare_anyway(app.id)
+                else:
+                    self.reapply(app.id)
+            except LLMRateLimited:
+                app.request = req  # try again next time
+                self.store.save(app)
+                stats.notes.append("Groq rate limit reached; queued requests will retry")
+                break
+            except Exception as e:
+                log.exception("request %s for %s failed", req, app.id)
+                app.error = f"{req} failed: {e}"
+                self.store.save(app)
+        for app in self.store.list([Status.QUEUED]):
+            res = self.submit(app, headless=self.cfg.apply.headless, dry_run=False)
+            if res.outcome == "submitted":
+                stats.submitted += 1
+            else:
+                stats.needs_review += 1
+        return stats
 
     def reapply(self, app_id: str) -> Application:
         """Fresh attempt at a job you already applied to (re-tailored, re-answered)."""
@@ -282,6 +346,7 @@ class Pipeline:
     def run(self, submit: bool = True) -> RunStats:
         stats = RunStats()
         self.recover_stuck()
+        self.process_queue(stats)
         stats.discovered_new = self.discover()
         self.process(stats)
         if submit:

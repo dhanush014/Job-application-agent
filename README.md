@@ -51,7 +51,7 @@ Anything else becomes **NEEDS_REVIEW**. Nothing is skipped: the resume, answers 
 ```bash
 git clone <this repo> && cd Job-application-agent
 python -m venv .venv && . .venv/bin/activate
-pip install -e ".[supabase]"          # drop [supabase] if you use SQLite
+pip install -e ".[browser]"
 playwright install chromium
 
 jobagent init                          # creates config.yaml, companies.yaml, .env, profile/
@@ -61,7 +61,7 @@ jobagent run                           # dry run by default: fills forms, never 
 jobagent serve                         # dashboard at http://127.0.0.1:8000
 ```
 
-When the dry runs look right, set `apply.dry_run: false`. From then on, `jobagent run` (from cron) or `jobagent loop --every-minutes 120` applies to up to `daily_limit` jobs a day, 50 by default.
+When the dry runs look right, set `apply.dry_run: false`. From then on, `jobagent run` (from cron) or `jobagent worker` (runs continuously) applies to up to `daily_limit` jobs a day, 50 by default.
 
 Example cron entry, every 2 hours from 8am to 8pm:
 ```
@@ -97,6 +97,46 @@ Groq's free tier has daily token and request caps per model; check console.groq.
 - point `smart_model` at a model with a higher daily cap
 
 `jobagent run` prints the tokens it used.
+
+## Hosting the dashboard (Vercel + Supabase, both free)
+
+The work is split into two parts because of what each one can run:
+
+| Part | Runs on | Why |
+|---|---|---|
+| **Dashboard** (review, edit, Apply) | Vercel | Quick web requests, no browser needed |
+| **Worker** (discover, tailor, fill forms, submit) | Your laptop or a free VM | Needs a real Chrome and minutes per run; Vercel functions time out and can't fit Chrome |
+| **Database + PDFs** | Supabase | Shared by both |
+
+When you click **Apply** on the hosted dashboard, the application is *queued* and the worker submits it within about a minute. If the worker hits a CAPTCHA, the application comes back to **Needs review**. You can then apply on the posting yourself, using the resume and cover letter PDFs linked on the page, and click **Mark as applied**.
+
+**1. Supabase**
+- Create a free project.
+- Run `supabase/schema.sql` in the SQL editor.
+- Create a **private** storage bucket named `applications`.
+
+**2. Vercel**
+- Choose **Add New → Project** and import this GitHub repo. Framework preset: *Other*. Vercel deploys the repo's default branch, so merge this branch first or set it as the production branch.
+- Add these environment variables:
+
+| Variable | Value |
+|---|---|
+| `DASHBOARD_PASSWORD` | A long password. Your browser asks for it; any username works |
+| `SUPABASE_URL`, `SUPABASE_KEY` | Supabase → Project Settings → API, using the `service_role` key |
+| `JOBAGENT_CONFIG` | The full contents of your `config.yaml`, with `storage: {backend: supabase}` |
+| `JOBAGENT_MASTER_RESUME` | The full contents of `profile/master_resume.yaml` |
+
+- Deploy. If a variable is missing, the site tells you which one instead of failing silently.
+
+**3. Worker**
+
+Use the same `config.yaml` (with `storage.backend: supabase`) and a `.env` containing `GROQ_API_KEY`, `SUPABASE_URL` and `SUPABASE_KEY`, then run:
+```bash
+jobagent worker        # a full run every 2 hours + picks up dashboard clicks every minute
+```
+- **Your laptop** works whenever it's on, and a home IP triggers the fewest CAPTCHAs.
+- To run around the clock for free, an **Oracle Cloud "Always Free" VM** (Ampere/ARM) has enough memory for Chrome. Run the worker there as a `systemd` service.
+- GitHub Actions is *not* recommended as the worker. Its terms limit Actions to work on the repo's own software, and its datacenter IPs get a lot of CAPTCHAs.
 
 ## Growing the company list
 

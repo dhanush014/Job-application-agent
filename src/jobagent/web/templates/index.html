@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block head %}{% if applying %}<meta http-equiv="refresh" content="10">{% endif %}{% endblock %}
+{% block head %}{% if applying %}<meta http-equiv="refresh" content="15">{% endif %}{% endblock %}
 {% block sub %}{{ applied_today }} / {{ cfg.apply.daily_limit }} applied today{% if cfg.apply.dry_run %} · dry-run mode{% endif %}{% endblock %}
 {% block body %}
 <div class="tabs">

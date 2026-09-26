@@ -1,13 +1,21 @@
-"""Local review dashboard: browse everything, edit answers, one-click apply."""
+"""Review dashboard: browse everything, edit answers, one-click apply.
+
+Local mode (`jobagent serve`): Apply opens a browser right here and submits.
+Hosted mode (Vercel): Apply queues the application; the worker submits it.
+Set DASHBOARD_PASSWORD to require a password (mandatory when hosted).
+"""
 
 from __future__ import annotations
 
+import base64
+import hmac
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from ..answers import is_cover_answer, review_reasons
@@ -20,6 +28,7 @@ TABS = [
     (Status.NEEDS_REVIEW, "Needs review"),
     (Status.READY, "Ready"),
     (Status.DRY_RUN, "Dry run"),
+    (Status.QUEUED, "Queued"),
     (Status.APPLYING, "Applying"),
     (Status.APPLIED, "Applied"),
     (Status.LOW_FIT, "Low fit"),
@@ -30,12 +39,36 @@ TABS = [
 ANSWER_REASON_PREFIXES = ("Needs your answer", "Low-confidence answer", "browser:")
 
 
-def create_app(pipeline: Pipeline) -> FastAPI:
+def _password_ok(header: str | None, password: str) -> bool:
+    if not header or not header.lower().startswith("basic "):
+        return False
+    try:
+        _, _, given = base64.b64decode(header[6:]).decode().partition(":")
+    except Exception:
+        return False
+    return hmac.compare_digest(given.encode(), password.encode())
+
+
+def create_app(pipeline: Pipeline, hosted: bool = False) -> FastAPI:
     app = FastAPI(title="jobagent")
     templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+    templates.env.globals["hosted"] = hosted
     worker = ThreadPoolExecutor(max_workers=1)  # one browser at a time
     store = pipeline.store
     cfg = pipeline.cfg
+
+    @app.middleware("http")
+    async def auth(request: Request, call_next):
+        password = os.environ.get("DASHBOARD_PASSWORD")
+        if not password:
+            if hosted:
+                return PlainTextResponse("Set DASHBOARD_PASSWORD in the Vercel project settings.", 503)
+            return await call_next(request)
+        if not _password_ok(request.headers.get("authorization"), password):
+            return PlainTextResponse(
+                "Password required", 401, headers={"WWW-Authenticate": 'Basic realm="jobagent"'}
+            )
+        return await call_next(request)
 
     def get_or_404(app_id: str) -> Application:
         a = store.get(app_id)
@@ -50,6 +83,15 @@ def create_app(pipeline: Pipeline) -> FastAPI:
             except Exception:
                 log.exception("background task failed")
         worker.submit(wrapped)
+
+    def queue_or_apply(a: Application) -> None:
+        if hosted:  # no browser on serverless: the worker picks it up
+            a.status = Status.QUEUED
+            store.save(a)
+            return
+        a.status = Status.APPLYING
+        store.save(a)
+        run_bg(apply_now, a.id)
 
     def apply_now(app_id: str):
         a = store.get(app_id)
@@ -69,7 +111,7 @@ def create_app(pipeline: Pipeline) -> FastAPI:
             request, "index.html",
             {"tabs": TABS, "counts": counts, "current": current, "rows": rows,
              "applied_today": pipeline.applied_today(), "cfg": cfg,
-             "applying": counts.get(Status.APPLYING, 0)},
+             "applying": counts.get(Status.APPLYING, 0) + counts.get(Status.QUEUED, 0)},
         )
 
     @app.get("/a/{app_id}", response_class=HTMLResponse)
@@ -117,9 +159,7 @@ def create_app(pipeline: Pipeline) -> FastAPI:
     async def apply(request: Request, app_id: str):
         a = get_or_404(app_id)
         await _save_answers(request, a)
-        a.status = Status.APPLYING
-        store.save(a)
-        run_bg(apply_now, app_id)
+        queue_or_apply(a)
         return RedirectResponse(f"/a/{app_id}", status_code=303)
 
     @app.post("/bulk-apply")
@@ -127,10 +167,14 @@ def create_app(pipeline: Pipeline) -> FastAPI:
         form = await request.form()
         status = Status(form.get("status"))
         for a in store.list([status]):
-            a.status = Status.APPLYING
-            store.save(a)
-            run_bg(apply_now, a.id)
-        return RedirectResponse(f"/?status={Status.APPLYING.value}", status_code=303)
+            queue_or_apply(a)
+        after = Status.QUEUED if hosted else Status.APPLYING
+        return RedirectResponse(f"/?status={after.value}", status_code=303)
+
+    @app.post("/a/{app_id}/mark-applied")
+    def mark_applied(app_id: str):
+        pipeline.mark_applied(get_or_404(app_id))
+        return RedirectResponse(f"/a/{app_id}", status_code=303)
 
     @app.post("/a/{app_id}/dismiss")
     def dismiss(app_id: str):
@@ -139,47 +183,57 @@ def create_app(pipeline: Pipeline) -> FastAPI:
         store.save(a)
         return RedirectResponse("/", status_code=303)
 
+    def _request(app_id: str, req: str, fn):
+        a = get_or_404(app_id)
+        if hosted:  # needs the LLM + minutes of work: leave it for the worker
+            a.request = req
+            store.save(a)
+        else:
+            run_bg(fn, app_id)
+
     @app.post("/a/{app_id}/prepare")
     def prepare(app_id: str):
-        get_or_404(app_id)
-        run_bg(pipeline.prepare_anyway, app_id)
+        _request(app_id, "prepare", pipeline.prepare_anyway)
         return RedirectResponse(f"/a/{app_id}", status_code=303)
 
     @app.post("/a/{app_id}/reapply")
     def reapply(app_id: str):
-        get_or_404(app_id)
-        run_bg(pipeline.reapply, app_id)
-        return RedirectResponse(f"/?status={Status.NEEDS_REVIEW.value}", status_code=303)
+        _request(app_id, "reapply", pipeline.reapply)
+        return RedirectResponse(f"/a/{app_id}" if hosted else f"/?status={Status.NEEDS_REVIEW.value}", status_code=303)
 
     @app.post("/run")
     def run():
+        if hosted:
+            raise HTTPException(400, "runs happen on the worker")
         run_bg(pipeline.run)
         return RedirectResponse("/", status_code=303)
 
-    def _file(path: str | None, media: str):
-        if not path or not Path(path).exists():
+    def _file(app_id: str, path: str | None, name: str, media: str):
+        if path and Path(path).exists():
+            return FileResponse(path, media_type=media)
+        data = store.download(f"{app_id}/{name}") if path else None
+        if data is None:
             raise HTTPException(404)
-        return FileResponse(path, media_type=media)
+        return Response(data, media_type=media)
 
     @app.get("/a/{app_id}/resume.pdf")
     def resume_pdf(app_id: str):
-        return _file(get_or_404(app_id).resume_pdf, "application/pdf")
+        return _file(app_id, get_or_404(app_id).resume_pdf, "resume.pdf", "application/pdf")
 
     @app.get("/a/{app_id}/cover.pdf")
     def cover_pdf(app_id: str):
-        return _file(get_or_404(app_id).cover_letter_pdf, "application/pdf")
+        return _file(app_id, get_or_404(app_id).cover_letter_pdf, "cover_letter.pdf", "application/pdf")
 
     @app.get("/a/{app_id}/screenshot.png")
     def screenshot(app_id: str):
-        return _file(get_or_404(app_id).screenshot, "image/png")
+        shot = get_or_404(app_id).screenshot
+        return _file(app_id, shot, Path(shot).name if shot else "", "image/png")
 
     @app.get("/export.xlsx")
     def export():
-        path = pipeline.export() or pipeline.cfg.data_path / "applications.xlsx"
-        if not Path(path).exists():
-            from ..store.export import export_xlsx
+        from ..store.export import export_xlsx
 
-            export_xlsx(store.list(), Path(path))
+        path = export_xlsx(store.list(), cfg.data_path / "applications.xlsx")
         return FileResponse(path, filename="applications.xlsx")
 
     return app

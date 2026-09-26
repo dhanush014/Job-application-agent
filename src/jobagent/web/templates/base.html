@@ -51,7 +51,7 @@ pre.jd { white-space:pre-wrap; font:13px/1.5 system-ui, sans-serif; max-height:4
   <h1><a href="/" style="color:inherit">jobagent</a></h1>
   <span class="muted small">{% block sub %}{% endblock %}</span>
   <span class="sp"></span>
-  <form method="post" action="/run"><button class="btn">Run now</button></form>
+  {% if not hosted %}<form method="post" action="/run"><button class="btn">Run now</button></form>{% endif %}
   <a class="btn" href="/export.xlsx">Export Excel</a>
 </header>
 <main>{% block body %}{% endblock %}</main>
