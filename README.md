@@ -63,6 +63,22 @@ jobagent serve                         # dashboard at http://127.0.0.1:8000
 
 Groq's model line-up changes over time. If a run fails with a model error, run `jobagent check-llm`: it lists the models on your account and tests the two in `config.yaml`. Models that can't do strict JSON mode still work — the agent retries without it and extracts the JSON itself.
 
+## Shortlist mode: no browser, you apply
+
+The simplest way to use this, and the most reliable, because nothing has to drive a web form:
+
+```bash
+jobagent shortlist --limit 20          # search companies.yaml
+jobagent shortlist <job-link> <job-link>   # or specific postings
+```
+
+It writes a folder (`data/shortlist/<date>/`) containing a **resume tailored to each posting** and an `index.html` listing every job with:
+- the link to the posting, and its fit score and summary
+- its tailored resume PDF (and cover letter, if the form wants one)
+- the answers to copy into the form, with anything it can't answer flagged
+
+Open `index.html`, work down the list, apply. No Playwright, no CAPTCHAs, nothing submitted on your behalf. If you only ever use this command, you can install without the browser: `pip install -e .`
+
 **Try it on two jobs first.** Pick two postings you like (Greenhouse or Ashby links) and run:
 ```bash
 jobagent try https://job-boards.greenhouse.io/<company>/jobs/<id> https://jobs.ashbyhq.com/<company>/<id>

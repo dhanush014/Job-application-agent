@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+import sys
 import time
 from pathlib import Path
 
@@ -137,6 +138,30 @@ def discover(config: str = CONFIG, verbose: bool = False):
     _setup_logging(verbose)
     p = _pipeline(config)
     typer.echo(f"new jobs: {p.discover()}")
+
+
+@app.command()
+def shortlist(
+    urls: list[str] = typer.Argument(None, help="Specific job links (default: search companies.yaml)"),
+    config: str = CONFIG,
+    limit: int = typer.Option(20, help="How many jobs to tailor a resume for"),
+    out: Path = typer.Option(None, help="Where to write the folder (default: data/shortlist/<date>)"),
+    verbose: bool = False,
+):
+    """Build a folder of jobs to apply to by hand: link + tailored resume, no browser."""
+    _setup_logging(verbose)
+    p = _pipeline(config)
+    index, apps = p.shortlist(urls=list(urls) if urls else None, limit=limit, out_dir=out)
+    for i, a in enumerate(sorted(apps, key=lambda a: -(a.score or 0)), start=1):
+        typer.echo(f"  {i:2d}. [{a.score if a.score is not None else '--':>3}] {a.title} @ {a.company_name}")
+        typer.echo(f"      {a.apply_url}")
+    if not apps:
+        typer.secho("No jobs matched. Loosen preferences in config.yaml or pass job links directly.", fg="yellow")
+        return
+    typer.secho(f"\n{len(apps)} job(s) ready: {index}", fg="green", bold=True)
+    typer.echo(f"Open it with:  open {index}" if sys.platform == "darwin" else f"Open {index} in your browser.")
+    if getattr(p.llm, "tokens_used", None):
+        typer.echo(f"groq tokens used: {p.llm.tokens_used}")
 
 
 @app.command("try")

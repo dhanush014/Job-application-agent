@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from conftest import FakeLLM, mock_http
 
@@ -154,3 +155,35 @@ def test_run_limit_caps_a_trial(cfg, store):
     stats = p.run(limit=1)
     assert stats.ready + stats.needs_review == 1  # only one job prepared
     assert len(sub.calls) <= 1
+
+
+def test_shortlist_builds_a_folder_with_links_and_resumes(cfg, store, tmp_path):
+    p, sub = make(cfg, store)
+    out = tmp_path / "shortlist"
+    index, apps = p.shortlist(limit=5, out_dir=out)
+    assert not sub.calls, "shortlist must never open a browser"
+    assert apps and index.exists()
+    page = index.read_text()
+    for a in apps:
+        assert a.apply_url in page              # the link to apply
+        assert a.title in page                  # what the job is
+    pdfs = sorted(q.name for q in out.glob("*.pdf"))
+    assert len(pdfs) >= len(apps)               # a tailored resume per job
+    assert pdfs[0].startswith("01_")            # ranked best-first
+    assert all(Path(a.resume_pdf).exists() for a in apps)
+
+
+def test_shortlist_from_specific_links(cfg, store, tmp_path):
+    p, sub = make(cfg, store)
+    index, apps = p.shortlist(
+        urls=["https://job-boards.greenhouse.io/acme/jobs/5001"], limit=5, out_dir=tmp_path / "s"
+    )
+    assert len(apps) == 1 and not sub.calls
+    assert "5001" in index.read_text()
+
+
+def test_shortlist_skips_low_fit_jobs(cfg, store, tmp_path):
+    p, _ = make(cfg, store, llm=FakeLLM(score=30))
+    index, apps = p.shortlist(limit=5, out_dir=tmp_path / "s")
+    assert apps == []
+    assert "No jobs matched" in index.read_text()

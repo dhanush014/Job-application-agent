@@ -20,6 +20,7 @@ from .resume.render import ResumeDoesNotFit, doc_bullets, fit, render_cover_lett
 from .scoring import rule_filter, score_job
 from .store import Store
 from .store.export import export_xlsx
+from .store.shortlist import export_shortlist
 from .tailor import tailor
 
 log = logging.getLogger(__name__)
@@ -348,6 +349,62 @@ class Pipeline:
         if app.score is None:
             self.score(app)
         return self.prepare(app)
+
+    def shortlist(
+        self,
+        urls: list[str] | None = None,
+        limit: int = 20,
+        out_dir: Path | None = None,
+    ) -> tuple[Path, list[Application]]:
+        """Prepare jobs and write a folder to work through by hand: the posting
+        link, a resume tailored to it, the cover letter and the form answers.
+        No browser and nothing submitted.
+
+        With `urls`, those exact postings are used. Otherwise jobs are
+        discovered from companies.yaml, rule-filtered and scored, and the best
+        `limit` are tailored."""
+        apps: list[Application] = []
+        if urls:
+            for url in urls:
+                job = job_from_url(self.http, url)
+                self.store.upsert_job(job)
+                app = Application.from_job(job)
+                if reason := rule_filter(job, self.cfg.preferences):
+                    log.info("%s would normally be filtered out: %s", job.title, reason)
+                self.score(app)
+                apps.append(self.prepare(app))
+        else:
+            self.discover()
+            todo = self.store.jobs_to_process(self.cfg.apply.allow_reapply, self.cfg.apply.reapply_after_days)
+            if self._listed is not None:
+                todo = [(j, n) for j, n in todo if j.key in self._listed]
+            scored: list[Application] = []
+            for job, attempt in todo:
+                app = Application.from_job(job, attempt)
+                if reason := rule_filter(job, self.cfg.preferences):
+                    app.status, app.review_reasons = Status.FILTERED, [reason]
+                    self.store.save(app)
+                    continue
+                try:
+                    if self.score(app):
+                        scored.append(app)
+                except LLMRateLimited:
+                    log.warning("Groq rate limit reached while scoring; using what we have")
+                    break
+            for app in sorted(scored, key=lambda a: -(a.score or 0))[:limit]:
+                try:
+                    apps.append(self.prepare(app))
+                except LLMRateLimited:
+                    log.warning("Groq rate limit reached while tailoring; stopping here")
+                    break
+                except Exception as e:
+                    log.exception("preparing %s failed", app.job_key)
+                    app.status, app.error = Status.FAILED, f"{type(e).__name__}: {e}"
+                    self.store.save(app)
+        out = out_dir or self.cfg.data_path / "shortlist" / datetime.now().strftime("%Y-%m-%d_%H%M")
+        index = export_shortlist(apps, out)
+        self.export()
+        return index, apps
 
     def export(self) -> Path | None:
         if not self.cfg.storage.excel_path:
