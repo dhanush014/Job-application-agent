@@ -17,6 +17,10 @@ class Preferences(BaseModel):
     title_exclude: list[str] = Field(default_factory=list)
     locations: list[str] = Field(default_factory=list)  # substrings; empty = anywhere
     allow_remote: bool = True
+    us_only: bool = False  # drop postings whose location is clearly outside the US
+    employment_types: list[str] = Field(default_factory=list)  # e.g. [FullTime]; Ashby reports it, Greenhouse doesn't
+    # told to the fit scorer: seniority you're targeting, visa needs, dealbreakers
+    candidate_notes: str = ""
     max_age_days: int | None = 30
     min_score: int = 70
     # resume bullets the LLM scores below this for a job are left out (unless the

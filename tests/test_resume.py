@@ -103,7 +103,7 @@ def test_bold_segments_keep_spaces_and_respect_case():
     segs = bold_segments("Built it in Go and Kafka, then go live", ["Go", "Kafka", "Python"])
     assert "".join(x.t for x in segs) == "Built it in Go and Kafka, then go live"
     assert [x.t for x in segs if x.b] == ["Go", "Kafka"]  # the verb "go" stays plain
-    assert len([x for x in bold_segments("Go Kafka Rust", ["Go", "Kafka", "Rust"]) if x.b]) == 2  # max two
+    assert len([x for x in bold_segments("Go Kafka Rust Java", ["Go", "Kafka", "Rust", "Java"]) if x.b]) == 3  # max three
 
 
 def test_bold_skills_render_with_spaces_and_prefer_job_keywords():
@@ -154,3 +154,36 @@ def test_weak_bullets_return_when_page_would_be_sparse():
     assert r.natural_fill >= 0.85  # didn't leave a half-empty page
     assert any("lower-relevance" in w for w in r.warnings)
     assert r.included[:2] == ["stripe-1", "stripe-2"]  # strongest still lead
+
+
+def test_academic_section_renders_between_experience_and_projects():
+    d = master_dict()
+    d["academic"] = [{
+        "id": "capstone", "company": "Community Safety App", "title": "AI Consultant (Capstone)",
+        "location": "Pittsburgh, PA", "start": "Aug 2026", "end": "Present", "min_bullets": 1,
+        "bullets": [{"id": "cap-1", "text": "Lead architecture and code reviews for a five-person AI team.", "skills": []}],
+    }]
+    m = MasterResume.model_validate(d)
+    r = fit(m, [b.id for b in m.iter_bullets()])
+    assert [e.heading for e in r.doc.academic] == ["Community Safety App"]
+    text = " ".join(r.render.text.split()).upper()
+    assert text.index("ACADEMIC EXPERIENCE") < text.index("PROJECTS")
+    assert text.index("EXPERIENCE") < text.index("ACADEMIC EXPERIENCE")
+    assert r.render.pages == 1
+
+
+def test_job_keywords_are_bolded_even_if_not_in_skill_list_and_in_skills_section():
+    m = load_master(ROOT / "profile.example/master_resume.yaml")
+    jd = ["payment webhooks", "Kafka", "PostgreSQL"]  # "payment webhooks" isn't a listed skill
+    r = fit(m, [b.id for b in m.iter_bullets()], bold_priority=jd)
+    stripe3 = r.doc.roles[0].segments[r.doc.roles[0].ids.index("stripe-3")]
+    assert [x.t for x in stripe3 if x.b] == ["payment webhooks"]
+    infra = next(s for s in r.doc.skills if s.category == "Infrastructure")
+    assert infra.items.startswith("Kafka, PostgreSQL")  # the job's skills lead the line
+    assert [x.t for x in infra.segments if x.b] == ["Kafka", "PostgreSQL"]
+    assert r.render.pages == 1
+
+
+def test_bold_does_not_split_hyphenated_words():
+    segs = bold_segments("Guide a LangGraph multi-agent system and an agent for Human-in-the-Loop review", ["agent", "Human-in-the-Loop"])
+    assert [x.t for x in segs if x.b] == ["agent", "Human-in-the-Loop"]

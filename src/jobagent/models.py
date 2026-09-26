@@ -99,6 +99,9 @@ class MasterResume(Strict):
     contact: Contact
     education: list[Education] = Field(min_length=1, max_length=3)
     roles: list[Role] = Field(min_length=1, max_length=8)
+    # school-affiliated work (capstones, research, TA roles) shown as its own
+    # "Academic Experience" section, formatted like jobs
+    academic: list[Role] = Field(default_factory=list, max_length=4)
     projects: list[Project] = Field(default_factory=list, max_length=6)
     skills: dict[str, list[str]] = Field(min_length=1, max_length=5)
 
@@ -111,25 +114,20 @@ class MasterResume(Strict):
             seen.add(b.id)
         return self
 
+    def groups(self) -> list:
+        """Every bullet-holding entry, in page order: jobs, academic, projects."""
+        return list(self.roles) + list(self.academic) + list(self.projects)
+
     def iter_bullets(self):
-        for r in self.roles:
-            yield from r.bullets
-        for p in self.projects:
-            yield from p.bullets
+        for g in self.groups():
+            yield from g.bullets
 
     def bullet_index(self) -> dict[str, Bullet]:
         return {b.id: b for b in self.iter_bullets()}
 
     def owner_of(self) -> dict[str, str]:
         """bullet id -> role/project id"""
-        out = {}
-        for r in self.roles:
-            for b in r.bullets:
-                out[b.id] = r.id
-        for p in self.projects:
-            for b in p.bullets:
-                out[b.id] = p.id
-        return out
+        return {b.id: g.id for g in self.groups() for b in g.bullets}
 
     def all_skills(self) -> list[str]:
         return [s for group in self.skills.values() for s in group]
@@ -138,7 +136,7 @@ class MasterResume(Strict):
         parts = [b.text for b in self.iter_bullets()]
         parts += self.all_skills()
         parts += [s for b in self.iter_bullets() for s in b.skills]
-        parts += [r.title for r in self.roles] + [p.name for p in self.projects]
+        parts += [r.title for r in self.roles + self.academic] + [p.name for p in self.projects]
         return "\n".join(parts)
 
 
@@ -183,6 +181,7 @@ class DocEntry(Strict):
 class SkillLine(Strict):
     category: str
     items: str
+    segments: list[Segment] = Field(default_factory=list)  # items with the job's skills in bold
 
 
 class Layout(Strict):
@@ -195,8 +194,13 @@ class ResumeDoc(Strict):
     contact: Contact
     education: list[Education]
     roles: list[DocEntry]
+    academic: list[DocEntry] = Field(default_factory=list)
     projects: list[DocEntry] = Field(default_factory=list)
     skills: list[SkillLine]
+
+    def entries(self) -> list[DocEntry]:
+        """Bullet-holding entries in page order (must match the template)."""
+        return self.roles + self.academic + self.projects
     layout: Layout = Field(default_factory=Layout)
 
 
@@ -219,6 +223,7 @@ class Job(BaseModel):
     description: str = ""
     posted_at: str | None = None
     remote: bool | None = None
+    employment_type: str | None = None  # e.g. FullTime, Intern, Contract (Ashby only)
 
     @property
     def key(self) -> str:

@@ -127,7 +127,10 @@ class Pipeline:
 
     def score(self, app: Application) -> bool:
         """Score and save. Returns True when the job is worth applying to."""
-        s = score_job(self.llm, app.to_job(), self.master, self.cfg.llm.max_jd_chars)
+        s = score_job(
+            self.llm, app.to_job(), self.master, self.cfg.llm.max_jd_chars,
+            notes=self.cfg.preferences.candidate_notes,
+        )
         app.score, app.fit_summary = s.score, s.summary
         app.matched, app.gaps, app.jd_keywords = s.matched, s.dealbreakers + s.gaps, s.jd_keywords
         if s.score < self.cfg.preferences.min_score or s.dealbreakers:
@@ -148,7 +151,7 @@ class Pipeline:
         try:
             fr = fit(
                 self.master, t.ranking, t.texts, t.skills,
-                bold_priority=t.skills + app.jd_keywords,
+                bold_priority=app.jd_keywords + t.skills,  # the job's own tool names first
                 relevance=t.relevance, min_relevance=self.cfg.preferences.min_bullet_relevance,
             )
         except ResumeDoesNotFit as e:

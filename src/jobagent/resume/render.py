@@ -41,7 +41,7 @@ SKILL_LINE_CHARS = 100  # conservative one-line budget at 10pt
 PAGE_HEIGHT_PT = 792.0
 MARGIN_PT = 0.45 * 72
 MIN_FILL = 0.85  # natural fill (before stretching) below this gets a warning
-MAX_BOLD_PER_BULLET = 2
+MAX_BOLD_PER_BULLET = 3
 # A wrapped bullet whose last line is under this fraction of the width leaves
 # an ugly one-or-two-word "dangling" line.
 DANGLING_FRACTION = 0.22
@@ -158,26 +158,39 @@ def _font_pt(font: float) -> float:
     return 9.5 + 1.5 * font
 
 
-def _skill_lines(master: MasterResume, order: list[str], font: float) -> list[SkillLine]:
+def _skill_lines(master: MasterResume, order: list[str], font: float, bold: list[str] | None = None) -> list[SkillLine]:
+    """One line per category. The job's skills (`bold`) go first and are bolded,
+    then the tailored order; whatever doesn't fit on the line is dropped."""
     pos = {s.lower(): i for i, s in enumerate(order)}
+    bold = [b for b in (bold or []) if b.strip()]
+
+    def wanted(item: str) -> bool:
+        return any(_find(t, item) for t in bold)
+
     budget_total = int(SKILL_LINE_CHARS * 10 / _font_pt(font))
     lines = []
     for cat, items in master.skills.items():
-        ranked = sorted(items, key=lambda s: (pos.get(s.lower(), 10_000), items.index(s)))
+        ranked = sorted(items, key=lambda s: (not wanted(s), pos.get(s.lower(), 10_000), items.index(s)))
         budget = budget_total - len(cat) - 2
         kept: list[str] = []
         for s in ranked:
             if len(", ".join(kept + [s])) > budget:
                 continue
             kept.append(s)
-        lines.append(SkillLine(category=cat, items=", ".join(kept)))
+        segs: list[Segment] = []
+        for i, item in enumerate(kept):
+            if i:
+                segs.append(Segment(t=", "))
+            segs.append(Segment(t=item, b=wanted(item)))
+        lines.append(SkillLine(category=cat, items=", ".join(kept), segments=segs if bold else []))
     return lines
 
 
 def _find(term: str, text: str) -> re.Match | None:
     # short terms ("Go", "SQL") must match case exactly so the verb "go" stays plain
     flags = 0 if len(term) <= 3 else re.I
-    return re.search(rf"(?<![\w+#]){re.escape(term)}(?![\w+#])", text, flags)
+    # hyphens count as part of a word: "agent" is not bolded inside "multi-agent"
+    return re.search(rf"(?<![\w+#-]){re.escape(term)}(?![\w+#-])", text, flags)
 
 
 def bold_segments(text: str, terms: list[str], limit: int = MAX_BOLD_PER_BULLET) -> list[Segment]:
@@ -211,23 +224,22 @@ def build_doc(
 ) -> ResumeDoc:
     """`chosen` is in relevance order; bullets appear most-relevant-first per role.
 
-    Skills are bolded inside bullets: only real skills (your master skill list
-    or the bullet's own tags), preferring those in `bold_priority` (the job's
-    keywords) when given, at most two per bullet.
+    With `bold_priority` (the job description's tools and technologies, most
+    important first), up to three of them are bolded in each bullet and the
+    matching items are bolded and moved first in the Skills lines. Without a
+    job, each bullet's own skill tags are bolded.
     """
     texts = texts or {}
     layout = layout or Layout()
     rank = {bid: i for i, bid in enumerate(chosen)}
     index = master.bullet_index()
-    vocab = {s.lower() for s in master.all_skills()}
 
     def terms_for(b) -> list[str]:
         if no_bold and b.id in no_bold:
             return []
-        own = {t.lower() for t in b.skills}
-        if bold_priority:
-            return [t for t in bold_priority if t.lower() in vocab | own]
-        return list(b.skills)
+        if bold_priority:  # tailoring: bold the job description's tools wherever they appear
+            return list(bold_priority)
+        return list(b.skills)  # no job: bold the bullet's own skill tags
 
     def entry_bullets(bs):
         picked = sorted((b for b in bs if b.id in rank), key=lambda b: rank[b.id])
@@ -235,13 +247,18 @@ def build_doc(
         segs = [bold_segments(t, terms_for(b)) for t, b in zip(plain, picked)]
         return plain, segs, [b.id for b in picked]
 
-    roles = []
-    for r in master.roles:
-        plain, segs, ids = entry_bullets(r.bullets)
-        roles.append(DocEntry(
-            heading=r.company, subheading=r.title, location=r.location,
-            dates=f"{r.start} – {r.end}", bullets=plain, segments=segs, ids=ids,
-        ))
+    def job_entries(roles) -> list[DocEntry]:
+        out = []
+        for r in roles:
+            plain, segs, ids = entry_bullets(r.bullets)
+            out.append(DocEntry(
+                heading=r.company, subheading=r.title, location=r.location,
+                dates=f"{r.start} – {r.end}", bullets=plain, segments=segs, ids=ids,
+            ))
+        return out
+
+    roles = job_entries(master.roles)
+    academic = [e for e in job_entries(master.academic) if e.bullets]
     projects = []
     for p in master.projects:
         plain, segs, ids = entry_bullets(p.bullets)
@@ -254,14 +271,15 @@ def build_doc(
         contact=master.contact,
         education=master.education,
         roles=roles,
+        academic=academic,
         projects=projects,
-        skills=_skill_lines(master, skills_order or [], layout.font),
+        skills=_skill_lines(master, skills_order or [], layout.font, bold_priority),
         layout=layout,
     )
 
 
 def doc_bullets(doc: ResumeDoc) -> list[str]:
-    return [b for e in doc.roles + doc.projects for b in e.bullets]
+    return [b for e in doc.entries() for b in e.bullets]
 
 
 def _norm(s: str) -> str:
@@ -319,7 +337,7 @@ def _fit_polished(master, ranking, texts, skills_order, bold_priority, exclude) 
     for _ in range(4):
         res = _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold, exclude)
         ids = doc_ids(res.doc)
-        segs = [s for e in res.doc.roles + res.doc.projects for s in e.segments]
+        segs = [s for e in res.doc.entries() for s in e.segments]
         changed = False
         for i in res.render.dangling():
             bid = ids[i]
@@ -341,7 +359,7 @@ def _fit_polished(master, ranking, texts, skills_order, bold_priority, exclude) 
 
 
 def doc_ids(doc: ResumeDoc) -> list[str]:
-    return [i for e in doc.roles + doc.projects for i in e.ids]
+    return [i for e in doc.entries() for i in e.ids]
 
 
 def _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold, exclude=frozenset()) -> FitResult:
@@ -352,7 +370,7 @@ def _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold, excl
 
     required: list[str] = []
     capped: set[str] = set()  # bullets past a role's max_bullets never compete
-    for grp in list(master.roles) + list(master.projects):
+    for grp in master.groups():
         mine = [b for b in ranking if owner[b] == grp.id]
         required += mine[: grp.min_bullets]
         if grp.max_bullets is not None:

@@ -58,7 +58,11 @@
   parts = parts + data.contact.links.map(l => link(l.url, l.label))
   text(size: fs - 0.5pt, parts.map(p => box(p)).join([ #h(0.2em)|#h(0.2em) ]))
 }
-#let skill-line(sk) = [#text(weight: "bold", sk.category + ": ")#sk.items]
+#let skill-line(sk) = [#text(weight: "bold", sk.category + ": ")#{
+  if sk.segments.len() > 0 {
+    sk.segments.map(x => if x.b { strong(x.t) } else { text(x.t) }).join()
+  } else { sk.items }
+}]
 
 // ---- Header ----
 #align(center)[
@@ -79,6 +83,15 @@
 #section("Experience")
 #for r in data.roles {
   entry(r.heading, r.dates, r.subheading, r.location, rich(r))
+}
+
+// ---- Academic experience ----
+#if data.academic.len() > 0 {
+  gap()
+  section("Academic Experience")
+  for r in data.academic {
+    entry(r.heading, r.dates, r.subheading, r.location, rich(r))
+  }
 }
 
 // ---- Projects ----
@@ -104,7 +117,7 @@
   let full = page.width - 1in
   let avail = full - 0.85 * text.size - measure([•]).width
   let bullets = ()
-  for grp in (data.roles, data.projects) {
+  for grp in (data.roles, data.academic, data.projects) {
     for e in grp {
       for b in rich(e) { bullets.push(measure(b).width / avail) }
     }

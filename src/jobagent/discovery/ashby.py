@@ -67,6 +67,7 @@ def parse_jobs(data: dict, org: str, name: str) -> list[Job]:
                 description=j.get("descriptionPlain") or html_to_text(j.get("descriptionHtml")),
                 posted_at=j.get("publishedAt"),
                 remote=j.get("isRemote"),
+                employment_type=j.get("employmentType"),
             )
         )
     return jobs

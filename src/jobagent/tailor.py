@@ -11,7 +11,9 @@ from .models import MasterResume, TailorOutput
 SYSTEM = """You tailor a resume to a job description.
 You receive the candidate's master bullets (each with an id) and a job description.
 Return EVERY bullet id exactly once, ranked by relevance to the job (0-100).
-You may lightly rephrase a bullet to mirror the job's terminology, but:
+You may lightly rephrase a bullet to mirror the job's terminology. When a bullet already uses a tool or
+technology the job names differently, use the job's exact name for it (e.g. "Postgres" -> "PostgreSQL",
+"k8s" -> "Kubernetes") so it can be highlighted. But:
 - never add a tool, skill, technology, number, employer, title or claim that is not in that bullet
 - never change or add numbers or metrics
 - keep it one sentence, past tense, under 170 characters
@@ -31,6 +33,7 @@ class Tailoring:
 def tailor(llm: LLM, master: MasterResume, jd: str, jd_keywords: list[str], max_jd_chars: int = 7000) -> Tailoring:
     owner = master.owner_of()
     groups = {r.id: f"{r.title} @ {r.company}" for r in master.roles}
+    groups.update({r.id: f"Academic: {r.title} @ {r.company}" for r in master.academic})
     groups.update({p.id: f"Project: {p.name}" for p in master.projects})
     lines = [f"[{b.id}] ({groups[owner[b.id]]}) {b.text}" for b in master.iter_bullets()]
     user = (

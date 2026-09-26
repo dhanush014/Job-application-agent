@@ -26,7 +26,7 @@ def _cell(s) -> str:
 def _bullets(app: Application) -> str:
     doc = app.resume_json or {}
     out = []
-    for e in doc.get("roles", []) + doc.get("projects", []):
+    for e in doc.get("roles", []) + doc.get("academic", []) + doc.get("projects", []):
         out.append(e.get("heading", ""))
         out += [f"  • {b}" for b in e.get("bullets", [])]
     return "\n".join(out)

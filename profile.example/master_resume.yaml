@@ -103,6 +103,16 @@ roles:
         text: Added Prometheus metrics and Grafana dashboards for the message queue consumers.
         skills: [Prometheus, Grafana]
 
+# Optional: school-affiliated work (capstone, research, TA) as its own
+# "Academic Experience" section, same fields as roles.
+# academic:
+#   - id: capstone
+#     company: Some Nonprofit
+#     title: AI Consultant (Capstone)
+#     start: Aug 2026
+#     end: Present
+#     bullets: [...]
+
 projects:
   - id: kvstore
     name: Raft-based Key-Value Store

@@ -5,6 +5,11 @@ preferences:
   title_exclude: [staff, principal, manager, director, intern, frontend]
   locations: [San Francisco, New York, United States]   # substring match; empty = anywhere
   allow_remote: true
+  us_only: false           # true: drop postings clearly outside the US
+  employment_types: []     # e.g. [FullTime]; only Ashby reports this, Greenhouse titles are filtered by title_exclude
+  # Told to the fit scorer. Put seniority, visa needs and dealbreakers here, e.g.
+  # "New-grad roles only. Needs H-1B sponsorship; 'no sponsorship' postings are dealbreakers."
+  candidate_notes: ""
   max_age_days: 30
   min_score: 70          # LLM fit score needed to apply (0-100)
   min_bullet_relevance: 40  # resume bullets scored below this for a job are left out

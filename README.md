@@ -25,7 +25,7 @@ The LLM never touches layout.
    - It spreads any last sliver evenly between sections. It won't do this when a thin resume would end up with huge gaps; `check-resume` tells you to add bullets instead.
 
    If the required content doesn't fit at 10pt, the type can shrink to 9.5pt.
-   Skills are **bolded** inside bullets: only skills from your master resume, preferring the ones the job asks for, at most two per bullet. Bold is dropped from any bullet where it would cause a dangling line.
+   The **job description's tools and technologies are bolded** wherever they appear in your bullets (up to three per bullet), and in the Skills lines, where they are also moved to the front. Bold is dropped from any bullet where it would cause a dangling line. Bullets the AI scores below `min_bullet_relevance` for the job are left out, so the page only shows your most relevant work.
 4. **Locked template.** `resume/template.typ` uses fixed fonts, margins and spacing, and treats all content as plain strings, so no markup can be injected.
 5. **Checks on the PDF itself:**
    - It has exactly one page, and the contact line and skill lines never wrap.

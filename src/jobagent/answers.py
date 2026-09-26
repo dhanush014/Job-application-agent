@@ -157,7 +157,7 @@ the profile, give confidence below 50."""
 
 def _profile_text(master: MasterResume, bank: Bank) -> str:
     lines = [f"Name: {master.contact.name}", f"Location: {master.contact.location}"]
-    for r in master.roles:
+    for r in master.roles + master.academic:
         lines.append(f"{r.title} at {r.company} ({r.start} - {r.end})")
         lines += [f"  - {b.text}" for b in r.bullets]
     for p in master.projects:
