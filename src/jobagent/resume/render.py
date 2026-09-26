@@ -279,6 +279,20 @@ def build_doc(
     )
 
 
+def _below_minimum(master: MasterResume, doc: ResumeDoc) -> list[str]:
+    """min_bullets is a promise: say so loudly if an entry came up short."""
+    rendered = {e.heading: len(e.bullets) for e in doc.entries()}
+    out = []
+    for grp in master.groups():
+        heading = grp.company if hasattr(grp, "company") else grp.name
+        got = rendered.get(heading, 0)
+        if got < grp.min_bullets:
+            out.append(
+                f"{heading} shows {got} bullet(s) but min_bullets is {grp.min_bullets}"
+            )
+    return out
+
+
 def _layout(style: Layout | None, **kw) -> Layout:
     """A Layout keeping the caller's font choice, with the fitter's knobs set."""
     base = style.model_dump() if style else {}
@@ -442,6 +456,7 @@ def _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold, excl
     # 4. finish: spread the remaining sliver between sections. Only a sliver:
     # stretching a thin resume makes huge gaps, which looks worse than space
     # at the bottom (the fix there is more master bullets).
+    shortfalls = _below_minimum(master, attempt(n, font, spacing)[0])
     doc, natural = attempt(n, font, spacing)
     result = natural
     if natural.fill >= MIN_FILL:
@@ -451,7 +466,7 @@ def _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold, excl
 
     keep = set(required) | set(optional[:n])
     included = [b for b in ranking if b in keep]
-    warnings = verify(doc, result)
+    warnings = verify(doc, result) + shortfalls
     if natural.fill < MIN_FILL and n == len(optional):
         warnings.append(
             f"only {natural.fill:.0%} of the page is used even with generous spacing; "

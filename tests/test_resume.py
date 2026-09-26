@@ -226,3 +226,32 @@ def test_job_keywords_win_when_there_is_only_room_for_some():
     bolded = {x.t for x in segs if x.b}
     assert {"Python", "Java"} <= bolded  # the job's terms always made the cut
     assert len(bolded) == 3
+
+
+def test_min_bullets_is_honoured_even_when_the_job_wants_none_of_that_role():
+    """A role the job scores at zero must still show its min_bullets."""
+    d = master_dict()
+    d["roles"][1]["min_bullets"] = 4          # Airbnb: at least 4, whatever the job wants
+    d["projects"][0]["min_bullets"] = 2
+    d["projects"][0]["max_bullets"] = 2       # and this one exactly 2
+    m = MasterResume.model_validate(d)
+    ids = [b.id for b in m.iter_bullets()]
+    rel = {b: (95 if b.startswith("stripe") else 1) for b in ids}   # only Stripe scores
+    r = fit(m, sorted(rel, key=lambda b: -rel[b]), relevance=rel, min_relevance=40)
+    counts = {e.heading: len(e.bullets) for e in r.doc.entries()}
+    assert counts["Airbnb"] >= 4, counts
+    assert counts["Raft-based Key-Value Store"] == 2, counts
+    assert not [w for w in r.warnings if "min_bullets" in w]
+
+
+def test_a_shortfall_is_reported_rather_than_shipped_quietly():
+    from jobagent.models import DocEntry
+
+    m = load_master(ROOT / "profile.example/master_resume.yaml")
+    r = fit(m, [b.id for b in m.iter_bullets()])
+    short = r.doc.model_copy(deep=True)
+    short.roles[0] = DocEntry(**{**short.roles[0].model_dump(), "bullets": [], "segments": [], "ids": []})
+    from jobagent.resume.render import _below_minimum
+
+    problems = _below_minimum(m, short)
+    assert problems and "min_bullets" in problems[0]

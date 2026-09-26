@@ -75,6 +75,8 @@ def check_resume(config: str = CONFIG):
         f"font={lay.family} {lay.point_size:.1f}pt, spacing={lay.spacing:.0%}, "
         f"bullets={len(res.included)} dropped={len(res.dropped)}"
     )
+    for e in res.doc.entries():
+        typer.echo(f"  {e.heading[:44]:46s} {len(e.bullets)} bullets")
     for w in res.warnings:
         typer.secho(f"  ! {w}", fg="yellow")
     typer.echo(f"preview: {out}")
