@@ -25,6 +25,7 @@ class Tailoring:
     texts: dict[str, str]  # only bullets whose rewrite passed validation
     skills: list[str]
     rejected: list[str] = field(default_factory=list)  # human-readable reasons
+    relevance: dict[str, int] = field(default_factory=dict)  # LLM's 0-100 score per bullet id
 
 
 def tailor(llm: LLM, master: MasterResume, jd: str, jd_keywords: list[str], max_jd_chars: int = 7000) -> Tailoring:
@@ -58,6 +59,10 @@ def _has_word(text: str, word: str) -> bool:
 def validate(master: MasterResume, out: TailorOutput, jd_keywords: list[str]) -> Tailoring:
     index = master.bullet_index()
     ranked = sorted(out.bullets, key=lambda b: -b.relevance)
+    relevance: dict[str, int] = {}
+    for tb in ranked:
+        if tb.source_id in index:
+            relevance.setdefault(tb.source_id, tb.relevance)
     ranking: list[str] = []
     texts: dict[str, str] = {}
     rejected: list[str] = []
@@ -83,7 +88,7 @@ def validate(master: MasterResume, out: TailorOutput, jd_keywords: list[str]) ->
         canon = allowed.get(s.strip().lower())
         if canon and canon not in skills:
             skills.append(canon)
-    return Tailoring(ranking=ranking, texts=texts, skills=skills, rejected=rejected)
+    return Tailoring(ranking=ranking, texts=texts, skills=skills, rejected=rejected, relevance=relevance)
 
 
 def _check_rewrite(src: str, src_skills: list[str], new: str, jd_keywords: list[str]) -> str | None:

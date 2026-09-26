@@ -36,3 +36,8 @@ def test_ranking_complete_and_unknown_ids_dropped():
 def test_skills_limited_to_master_list():
     t = validate(M, out([], ["kafka", "Blockchain", "Go", "go"]), [])
     assert t.skills == ["Kafka", "Go"]
+
+
+def test_relevance_scores_are_kept_per_bullet():
+    t = validate(M, out([{"source_id": "kv-1", "text": "", "relevance": 88}, {"source_id": "twilio-2", "text": "", "relevance": 12}]), [])
+    assert t.relevance == {"kv-1": 88, "twilio-2": 12}

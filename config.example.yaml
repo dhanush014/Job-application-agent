@@ -7,6 +7,7 @@ preferences:
   allow_remote: true
   max_age_days: 30
   min_score: 70          # LLM fit score needed to apply (0-100)
+  min_bullet_relevance: 40  # resume bullets scored below this for a job are left out
 
 llm:
   # Groq free tier. Check current model ids at https://console.groq.com/docs/models

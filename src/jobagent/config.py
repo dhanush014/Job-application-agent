@@ -19,6 +19,9 @@ class Preferences(BaseModel):
     allow_remote: bool = True
     max_age_days: int | None = 30
     min_score: int = 70
+    # resume bullets the LLM scores below this for a job are left out (unless the
+    # page would look sparse without them); each role's min_bullets always stay
+    min_bullet_relevance: int = 40
 
 
 class LLMConfig(BaseModel):

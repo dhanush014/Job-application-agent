@@ -134,3 +134,23 @@ def test_project_role_and_dates_render_without_blank_line():
     p = r.doc.projects[0]
     assert (p.subheading, p.dates) == ("Maintainer", "2024 – 2025")
     assert "Maintainer" in r.render.text and r.render.pages == 1
+
+
+def test_low_relevance_bullets_left_out_when_page_still_looks_full():
+    m = load_master(ROOT / "profile.example/master_resume.yaml")
+    ids = [b.id for b in m.iter_bullets()]
+    rel = {b: 90 for b in ids}
+    rel.update({"twilio-2": 10, "airbnb-7": 5})  # clearly irrelevant to this job
+    r = fit(m, ids, relevance=rel, min_relevance=40)
+    assert "twilio-2" not in r.included and "airbnb-7" not in r.included
+    assert r.render.pages == 1
+
+
+def test_weak_bullets_return_when_page_would_be_sparse():
+    m = load_master(ROOT / "profile.example/master_resume.yaml")
+    ids = [b.id for b in m.iter_bullets()]
+    rel = {"stripe-1": 95, "stripe-2": 90}  # everything else scores 0
+    r = fit(m, ids, relevance=rel, min_relevance=40)
+    assert r.natural_fill >= 0.85  # didn't leave a half-empty page
+    assert any("lower-relevance" in w for w in r.warnings)
+    assert r.included[:2] == ["stripe-1", "stripe-2"]  # strongest still lead

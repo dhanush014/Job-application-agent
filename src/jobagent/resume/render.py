@@ -290,16 +290,34 @@ def fit(
     texts: dict[str, str] | None = None,
     skills_order: list[str] | None = None,
     bold_priority: list[str] | None = None,
+    relevance: dict[str, int] | None = None,
+    min_relevance: int = 0,
 ) -> FitResult:
-    """Fit to one full page. When a bullet ends in a dangling last line, first
-    revert an LLM rewrite to the master wording, then drop that bullet's bold
-    (bold is wider), and re-fit. Leftovers are master bullets to shorten."""
+    """Fit to one full page.
+
+    Bullets scoring under `min_relevance` for this job are left out (the space
+    goes to spacing instead), unless leaving them out would make the page look
+    sparse; then they come back in rank order. Each role's `min_bullets` always
+    stay. When a bullet ends in a dangling last line, an LLM rewrite is first
+    reverted to the master wording, then that bullet's bold is dropped (bold is
+    wider), and the page is re-fitted. Leftovers are master bullets to shorten."""
+    weak: set[str] = set()
+    if relevance is not None and min_relevance > 0:
+        weak = {b.id for b in master.iter_bullets() if relevance.get(b.id, 0) < min_relevance}
+    res = _fit_polished(master, ranking, texts, skills_order, bold_priority, weak)
+    if weak and res.natural_fill < MIN_FILL:
+        res = _fit_polished(master, ranking, texts, skills_order, bold_priority, set())
+        res.warnings.append("few bullets matched this job strongly; added lower-relevance ones to fill the page")
+    return res
+
+
+def _fit_polished(master, ranking, texts, skills_order, bold_priority, exclude) -> FitResult:
     texts = dict(texts or {})
     index = master.bullet_index()
     no_bold: set[str] = set()
-    reverted = unbolded = 0
+    reverted = 0
     for _ in range(4):
-        res = _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold)
+        res = _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold, exclude)
         ids = doc_ids(res.doc)
         segs = [s for e in res.doc.roles + res.doc.projects for s in e.segments]
         changed = False
@@ -311,7 +329,6 @@ def fit(
                 changed = True
             elif bid not in no_bold and any(x.b for x in segs[i]):
                 no_bold.add(bid)
-                unbolded += 1
                 changed = True
         if not changed:
             break
@@ -327,7 +344,7 @@ def doc_ids(doc: ResumeDoc) -> list[str]:
     return [i for e in doc.roles + doc.projects for i in e.ids]
 
 
-def _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold) -> FitResult:
+def _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold, exclude=frozenset()) -> FitResult:
     owner = master.owner_of()
     ranking = [b for b in ranking if b in owner]
     # bullets the LLM forgot about still compete, at the bottom of the ranking
@@ -340,7 +357,7 @@ def _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold) -> F
         required += mine[: grp.min_bullets]
         if grp.max_bullets is not None:
             capped |= set(mine[grp.max_bullets:])
-    optional = [b for b in ranking if b not in required and b not in capped]
+    optional = [b for b in ranking if b not in required and b not in capped and b not in exclude]
 
     cache: dict[tuple, tuple[ResumeDoc, RenderResult]] = {}
 

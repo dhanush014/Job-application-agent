@@ -146,7 +146,11 @@ class Pipeline:
         # 1. resume
         t = tailor(self.llm, self.master, job.description, app.jd_keywords, self.cfg.llm.max_jd_chars)
         try:
-            fr = fit(self.master, t.ranking, t.texts, t.skills, bold_priority=t.skills + app.jd_keywords)
+            fr = fit(
+                self.master, t.ranking, t.texts, t.skills,
+                bold_priority=t.skills + app.jd_keywords,
+                relevance=t.relevance, min_relevance=self.cfg.preferences.min_bullet_relevance,
+            )
         except ResumeDoesNotFit as e:
             reasons.append(f"tailored resume did not fit ({e}); used master ordering")
             fr = fit(self.master, [b.id for b in self.master.iter_bullets()])
