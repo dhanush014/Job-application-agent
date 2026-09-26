@@ -60,6 +60,7 @@ class RenderResult:
     line_ratios: list[float] = field(default_factory=list)  # per bullet, doc order
     header_ratio: float = 0.0
     skill_ratios: list[float] = field(default_factory=list)
+    detail_ratios: list[float] = field(default_factory=list)  # education detail lines
 
     def dangling(self) -> list[int]:
         """Indexes (doc order) of bullets whose last wrapped line is tiny."""
@@ -72,8 +73,12 @@ class RenderResult:
 
     @property
     def lines_ok(self) -> bool:
-        """One page, and the contact line and skill lines don't wrap."""
-        return self.pages == 1 and self.header_ratio <= 1 and all(r <= 1 for r in self.skill_ratios)
+        """One page, and the contact, skill and education detail lines don't wrap."""
+        return (
+            self.pages == 1
+            and self.header_ratio <= 1
+            and all(r <= 1 for r in self.skill_ratios + self.detail_ratios)
+        )
 
 
 @dataclass
@@ -125,6 +130,7 @@ class _Renderer:
             line_ratios=[float(x) for x in w.get("bullets", [])],
             header_ratio=float(w.get("header", 0)),
             skill_ratios=[float(x) for x in w.get("skills", [])],
+            detail_ratios=[float(x) for x in w.get("details", [])],
         )
 
 
@@ -239,7 +245,10 @@ def build_doc(
     projects = []
     for p in master.projects:
         plain, segs, ids = entry_bullets(p.bullets)
-        projects.append(DocEntry(heading=p.name, subheading=p.link, bullets=plain, segments=segs, ids=ids))
+        projects.append(DocEntry(
+            heading=p.name, subheading=p.role or p.link, location=p.location, dates=p.dates,
+            bullets=plain, segments=segs, ids=ids,
+        ))
     projects = [p for p in projects if p.bullets]
     return ResumeDoc(
         contact=master.contact,
@@ -325,9 +334,13 @@ def _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold) -> F
     ranking += [b.id for b in master.iter_bullets() if b.id not in ranking]
 
     required: list[str] = []
+    capped: set[str] = set()  # bullets past a role's max_bullets never compete
     for grp in list(master.roles) + list(master.projects):
-        required += [b for b in ranking if owner[b] == grp.id][: grp.min_bullets]
-    optional = [b for b in ranking if b not in required]
+        mine = [b for b in ranking if owner[b] == grp.id]
+        required += mine[: grp.min_bullets]
+        if grp.max_bullets is not None:
+            capped |= set(mine[grp.max_bullets:])
+    optional = [b for b in ranking if b not in required and b not in capped]
 
     cache: dict[tuple, tuple[ResumeDoc, RenderResult]] = {}
 

@@ -71,20 +71,27 @@ class Role(Strict):
     start: str = Field(min_length=1, max_length=20)
     end: str = Field(min_length=1, max_length=20)
     min_bullets: int = Field(default=2, ge=0, le=6)
+    max_bullets: int | None = Field(default=None, ge=1, le=12)  # cap per role (None = as many as fit)
     bullets: list[Bullet] = Field(min_length=1)
 
     @model_validator(mode="after")
     def _min_le_total(self) -> "Role":
         if self.min_bullets > len(self.bullets):
             raise ValueError(f"role {self.id}: min_bullets > number of bullets")
+        if self.max_bullets is not None and self.max_bullets < self.min_bullets:
+            raise ValueError(f"role {self.id}: max_bullets < min_bullets")
         return self
 
 
 class Project(Strict):
     id: str = Field(min_length=1, max_length=40)
     name: str = Field(min_length=1, max_length=80)
-    link: str = ""
+    role: str = Field(default="", max_length=80)  # e.g. "AI Consultant (Capstone)"; shown under the name
+    link: str = ""  # shown under the name when there is no role
+    location: str = Field(default="", max_length=60)
+    dates: str = Field(default="", max_length=40)  # e.g. "Jun 2026 – Aug 2026"
     min_bullets: int = Field(default=0, ge=0, le=4)
+    max_bullets: int | None = Field(default=None, ge=1, le=8)
     bullets: list[Bullet] = Field(min_length=1)
 
 

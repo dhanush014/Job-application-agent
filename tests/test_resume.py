@@ -114,3 +114,23 @@ def test_bold_skills_render_with_spaces_and_prefer_job_keywords():
     stripe1 = r.doc.roles[0].segments[r.doc.roles[0].ids.index("stripe-1")]
     assert [x.t for x in stripe1 if x.b] == ["Kafka"]  # only the job's keyword, not Go
     assert r.render.pages == 1 and not r.render.dangling()
+
+
+def test_max_bullets_caps_a_role_and_page_still_fills():
+    d = master_dict()
+    d["roles"][0]["max_bullets"] = 4
+    m = MasterResume.model_validate(d)
+    r = fit(m, [b.id for b in m.iter_bullets()])
+    assert len(r.doc.roles[0].bullets) == 4
+    assert r.render.pages == 1
+    assert r.doc.layout.spacing > 0 and r.doc.layout.stretch  # freed space goes to spacing, not a blank band
+
+
+def test_project_role_and_dates_render_without_blank_line():
+    d = master_dict()
+    d["projects"][0].update({"role": "Maintainer", "dates": "2024 – 2025"})
+    m = MasterResume.model_validate(d)
+    r = fit(m, [b.id for b in m.iter_bullets()])
+    p = r.doc.projects[0]
+    assert (p.subheading, p.dates) == ("Maintainer", "2024 – 2025")
+    assert "Maintainer" in r.render.text and r.render.pages == 1

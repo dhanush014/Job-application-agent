@@ -30,12 +30,14 @@
 
 #let entry(heading, dates, sub, loc, bullets) = {
   block(above: 0.62em * gapk, below: 0em, breakable: true)[
+    #let cells = (text(weight: "bold", heading), text(dates))
+    // second line (title / location) only when there is something to show
+    #if sub != "" or loc != "" { cells += (emph(sub), emph(loc)) }
     #grid(
       columns: (1fr, auto),
       align: (left, right),
       row-gutter: 0.36em * k,
-      text(weight: "bold", heading), text(dates),
-      if sub != "" { emph(sub) }, if loc != "" { emph(loc) },
+      ..cells,
     )
     #if bullets.len() > 0 {
       v(0.08em * k)
@@ -111,5 +113,6 @@
     bullets: bullets,
     header: measure(contact-line).width / full,
     skills: data.skills.map(sk => measure(skill-line(sk)).width / full),
+    details: data.education.map(e => e.details).flatten().map(d => measure([#d]).width / avail),
   )) <widths>]
 }
