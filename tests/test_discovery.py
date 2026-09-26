@@ -45,3 +45,21 @@ def test_ashby_compensation_is_added_to_description():
                       "compensation": {"compensationTierSummary": "$150K – $200K • Offers Equity"}}]}
     job = ashby.parse_jobs(data, "x", "X")[0]
     assert job.description.endswith("Compensation: $150K – $200K • Offers Equity")
+
+
+def test_job_from_url_greenhouse_and_ashby():
+    import pytest
+
+    from jobagent.discovery import job_from_url
+
+    client = mock_http()
+    gh = job_from_url(client, "https://job-boards.greenhouse.io/acme/jobs/5001?gh_src=abc")
+    assert (gh.ats, gh.company, gh.job_id) == ("greenhouse", "acme", "5001")
+    gh2 = job_from_url(client, "https://boards.greenhouse.io/embed/job_app?for=acme&token=5001")
+    assert gh2.job_id == "5001"
+    ab = job_from_url(client, "https://jobs.ashbyhq.com/ramp/0b1c2d3e-aaaa-bbbb-cccc-000000000001/application")
+    assert (ab.ats, ab.company) == ("ashby", "ramp")
+    with pytest.raises(ValueError):
+        job_from_url(client, "https://example.com/careers/123")
+    with pytest.raises(ValueError):
+        job_from_url(client, "https://job-boards.greenhouse.io/acme/jobs/999")

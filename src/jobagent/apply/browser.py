@@ -84,7 +84,11 @@ class Submitter:
         if detect_captcha(page):
             problems.append("CAPTCHA challenge on the page")
         if dry_run:
-            return SubmitResult("dry_run", "filled; submit not clicked (dry run)", self._shot(page, app, "filled"), problems)
+            shot = self._shot(page, app, "filled")
+            if not headless:  # trial run: leave the filled form open for you to inspect
+                log.info("dry run: review the filled form, then close the browser window (max %ss)", self.manual_finish_seconds)
+                wait_closed(page, self.manual_finish_seconds)
+            return SubmitResult("dry_run", "filled; submit not clicked (dry run)", shot, problems)
         if problems and headless:
             return SubmitResult("needs_human", "; ".join(problems), self._shot(page, app, "problems"), problems)
         if not problems:
@@ -258,6 +262,15 @@ def wait_confirmation(page, seconds: float) -> bool:
             pass  # page navigating, or closed by the user
         page.wait_for_timeout(1000)
     return False
+
+
+def wait_closed(page, seconds: float) -> None:
+    deadline = time.time() + seconds
+    while time.time() < deadline and not page.is_closed():
+        try:
+            page.wait_for_timeout(1000)
+        except Exception:
+            return  # closed by the user
 
 
 def visible_errors(page) -> list[str]:

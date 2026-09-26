@@ -86,12 +86,45 @@ def discover(config: str = CONFIG, verbose: bool = False):
     typer.echo(f"new jobs: {p.discover()}")
 
 
+@app.command("try")
+def try_jobs(
+    urls: list[str] = typer.Argument(..., help="Greenhouse or Ashby job links"),
+    config: str = CONFIG,
+    live: bool = typer.Option(False, "--live", help="Actually submit (default: fill the form and stop)"),
+    headless: bool = typer.Option(False, help="Hide the browser (default: show it so you can watch)"),
+    verbose: bool = False,
+):
+    """Trial run on specific postings: tailor, write, fill, and (with --live) submit."""
+    _setup_logging(verbose)
+    p = _pipeline(config)
+    for app_, filtered in p.try_urls(urls, live=live, headless=headless):
+        typer.secho(f"\n{app_.title} @ {app_.company_name}", bold=True)
+        typer.echo(f"  fit score: {app_.score}   status: {app_.status.value}")
+        if filtered:
+            typer.secho(f"  note: your filters would normally skip this job ({filtered})", fg="yellow")
+        typer.echo(f"  resume:        {app_.resume_pdf}")
+        if app_.cover_letter_pdf:
+            typer.echo(f"  cover letter:  {app_.cover_letter_pdf}")
+        if app_.screenshot:
+            typer.echo(f"  screenshot:    {app_.screenshot}")
+        answered = sum(1 for a in app_.answers if a.value not in (None, "", []))
+        typer.echo(f"  form: {answered}/{len(app_.answers)} fields answered")
+        for r in app_.review_reasons:
+            typer.secho(f"  ! {r}", fg="yellow")
+    typer.echo("\nOpen the dashboard (jobagent serve) to see each resume, answer and cover letter.")
+
+
 @app.command()
-def run(config: str = CONFIG, submit: bool = typer.Option(True, help="Submit READY applications"), verbose: bool = False):
+def run(
+    config: str = CONFIG,
+    submit: bool = typer.Option(True, help="Submit READY applications"),
+    limit: int = typer.Option(0, help="Only prepare/submit this many jobs (0 = no limit), e.g. 2 for a trial"),
+    verbose: bool = False,
+):
     """Discover, score, tailor, answer and (auto-)submit. Safe to run from cron."""
     _setup_logging(verbose)
     p = _pipeline(config)
-    stats = p.run(submit=submit)
+    stats = p.run(submit=submit, limit=limit or None)
     typer.echo(
         f"new={stats.discovered_new} filtered={stats.filtered} low_fit={stats.low_fit} ready={stats.ready} "
         f"needs_review={stats.needs_review} failed={stats.failed} submitted={stats.submitted} dry_run={stats.dry_run}"

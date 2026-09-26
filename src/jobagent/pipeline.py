@@ -13,7 +13,7 @@ from . import policy
 from .answers import Bank, answer_form, is_cover_answer, review_reasons, write_cover_letter
 from .apply.browser import Files, SubmitResult, Submitter
 from .config import Config
-from .discovery import fetch_all, fetch_form, make_client
+from .discovery import fetch_all, fetch_form, job_from_url, make_client
 from .llm import LLM, LLMRateLimited
 from .models import Application, FieldType, Status
 from .resume.render import ResumeDoesNotFit, doc_bullets, fit, render_cover_letter, save_pdf
@@ -88,9 +88,11 @@ class Pipeline:
                 n += 1
         return n
 
-    def process(self, stats: RunStats | None = None) -> RunStats:
+    def process(self, stats: RunStats | None = None, limit: int | None = None) -> RunStats:
+        """Prepare new jobs; `limit` caps how many get prepared this run (e.g. a 2-job trial)."""
         stats = stats or RunStats()
         prepared = 0
+        cap = min(self.cfg.apply.max_prepare_per_run, limit) if limit else self.cfg.apply.max_prepare_per_run
         todo = self.store.jobs_to_process(self.cfg.apply.allow_reapply, self.cfg.apply.reapply_after_days)
         if self._listed is not None:  # skip postings that have since been taken down
             todo = [(j, n) for j, n in todo if j.key in self._listed]
@@ -101,8 +103,8 @@ class Pipeline:
                 self.store.save(app)
                 stats.filtered += 1
                 continue
-            if prepared >= self.cfg.apply.max_prepare_per_run:
-                stats.notes.append("hit max_prepare_per_run; the rest will be handled next run")
+            if prepared >= cap:
+                stats.notes.append(f"prepared {cap} job(s) this run; the rest will be handled next run")
                 break
             try:
                 if not self.score(app):
@@ -222,7 +224,7 @@ class Pipeline:
         midnight = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
         return self.store.count_applied_since(midnight.astimezone(timezone.utc))
 
-    def submit_ready(self, stats: RunStats | None = None) -> RunStats:
+    def submit_ready(self, stats: RunStats | None = None, limit: int | None = None) -> RunStats:
         stats = stats or RunStats()
         if not self.cfg.apply.auto_submit:
             return stats
@@ -231,6 +233,8 @@ class Pipeline:
         if self.cfg.apply.dry_run:
             queue = [a for a in queue if a.status == Status.READY]
         remaining = self.cfg.apply.daily_limit - self.applied_today()
+        if limit:
+            remaining = min(remaining, limit)
         if remaining <= 0:
             stats.notes.append("daily limit reached")
             return stats
@@ -350,13 +354,31 @@ class Pipeline:
             return None
         return export_xlsx(self.store.list(), self.cfg.path(self.cfg.storage.excel_path))
 
-    def run(self, submit: bool = True) -> RunStats:
+    def run(self, submit: bool = True, limit: int | None = None) -> RunStats:
         stats = RunStats()
         self.recover_stuck()
         self.process_queue(stats)
         stats.discovered_new = self.discover()
-        self.process(stats)
+        self.process(stats, limit=limit)
         if submit:
-            self.submit_ready(stats)
+            self.submit_ready(stats, limit=limit)
         self.export()
         return stats
+
+    def try_urls(self, urls: list[str], *, live: bool = False, headless: bool = False) -> list[tuple[Application, str | None]]:
+        """Trial run on postings you pick: score, tailor, write the cover letter,
+        fill the form (in a visible browser by default) and, only with live=True,
+        submit. Filters and the fit threshold are reported, not enforced."""
+        apps = []
+        for url in urls:
+            job = job_from_url(self.http, url)
+            self.store.upsert_job(job)
+            previous = [a for a in self.store.list() if a.job_key == job.key]
+            app = Application.from_job(job, attempt=len(previous) + 1)
+            filtered = rule_filter(job, self.cfg.preferences)
+            self.score(app)
+            self.prepare(app)
+            self.submit(app, headless=headless, dry_run=not live)
+            apps.append((self.store.get(app.id) or app, filtered))
+        self.export()
+        return apps

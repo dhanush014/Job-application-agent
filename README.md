@@ -61,6 +61,17 @@ jobagent run                           # dry run by default: fills forms, never 
 jobagent serve                         # dashboard at http://127.0.0.1:8000
 ```
 
+**Try it on two jobs first.** Pick two postings you like (Greenhouse or Ashby links) and run:
+```bash
+jobagent try https://job-boards.greenhouse.io/<company>/jobs/<id> https://jobs.ashbyhq.com/<company>/<id>
+```
+For each posting it:
+- scores the fit
+- builds the tailored resume and cover letter
+- fills the application in a **visible** browser, then stops before submitting so you can inspect the form (close the window to continue)
+
+It prints the file paths, and `jobagent serve` shows everything. When you're happy, submit those same two for real with `--live`. Use `jobagent run --limit 2` to trial the automatic pipeline on 2 discovered jobs.
+
 When the dry runs look right, set `apply.dry_run: false`. From then on, `jobagent run` (from cron) or `jobagent worker` (runs continuously) applies to up to `daily_limit` jobs a day, 50 by default.
 
 Example cron entry, every 2 hours from 8am to 8pm:

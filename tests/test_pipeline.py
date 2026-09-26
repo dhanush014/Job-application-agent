@@ -126,3 +126,31 @@ def test_cover_letter_written_rendered_and_attached(cfg, store):
     text = pdf.pages[0].extract_text()
     assert len(pdf.pages) == 1 and "Alex Rivera" in text and "Acme" in text
     assert next(a for a in gh.answers if a.field == "cover_letter").value == "cover_letter"
+
+
+def test_try_two_specific_jobs_dry_run_by_default(cfg, store):
+    p, sub = make(cfg, store)
+    results = p.try_urls([
+        "https://job-boards.greenhouse.io/acme/jobs/5001",
+        "https://jobs.ashbyhq.com/ramp/0b1c2d3e-aaaa-bbbb-cccc-000000000001",
+    ])
+    assert len(results) == 2 and len(sub.calls) == 2
+    assert all(dry for _, headless, dry in sub.calls)  # nothing submitted
+    assert all(not headless for _, headless, _ in sub.calls)  # visible browser for a trial
+    for app, _ in results:
+        assert app.resume_pdf and app.status in (Status.DRY_RUN, Status.NEEDS_REVIEW)
+
+
+def test_try_live_submits_and_reports_filters(cfg, store):
+    p, sub = make(cfg, store)
+    (app, filtered), = p.try_urls(["https://job-boards.greenhouse.io/acme/jobs/5002"], live=True)
+    assert filtered  # "Engineering Manager" is normally skipped by the title filters
+    assert sub.calls[-1][2] is False and app.status == Status.APPLIED
+
+
+def test_run_limit_caps_a_trial(cfg, store):
+    cfg.apply.dry_run = False
+    p, sub = make(cfg, store)
+    stats = p.run(limit=1)
+    assert stats.ready + stats.needs_review == 1  # only one job prepared
+    assert len(sub.calls) <= 1
