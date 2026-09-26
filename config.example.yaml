@@ -1,0 +1,40 @@
+# jobagent configuration. Copy to config.yaml (`jobagent init` does this).
+
+preferences:
+  title_include: [software engineer, backend, platform, infrastructure]
+  title_exclude: [staff, principal, manager, director, intern, frontend]
+  locations: [San Francisco, New York, United States]   # substring match; empty = anywhere
+  allow_remote: true
+  max_age_days: 30
+  min_score: 70          # LLM fit score needed to apply (0-100)
+
+llm:
+  # Groq free tier. Check current model ids at https://console.groq.com/docs/models
+  fast_model: llama-3.1-8b-instant        # scoring + multiple-choice answers
+  smart_model: llama-3.3-70b-versatile    # resume tailoring + written answers
+  temperature: 0.2
+
+apply:
+  auto_submit: true        # submit everything that passes the gates, no approval
+  dry_run: true            # START HERE: fill forms but don't click submit. Set false once you trust it.
+  daily_limit: 50
+  max_prepare_per_run: 120 # keeps each run inside Groq's free daily token budget
+  delay_seconds: [15, 60]  # pause between submissions
+  headless: true
+  review_headless: false   # "Apply" in the dashboard opens a visible browser you can finish by hand
+  allow_reapply: true      # re-apply to a job you already applied to...
+  reapply_after_days: 30   # ...once this many days have passed (or click "Apply again")
+  min_answer_confidence: 70
+  browser_executable: null # path to Chrome/Chromium if Playwright's bundled one isn't installed
+  manual_finish_seconds: 600
+
+storage:
+  backend: sqlite          # or "supabase" (set SUPABASE_URL / SUPABASE_KEY in .env)
+  sqlite_path: data/jobagent.db
+  supabase_bucket: applications
+  excel_path: data/applications.xlsx   # refreshed after every run
+
+email:
+  # Optional: lets the agent read Greenhouse's emailed security codes.
+  imap_host: null          # e.g. imap.gmail.com
+  username: null           # e.g. you@gmail.com (password: IMAP_PASSWORD in .env)

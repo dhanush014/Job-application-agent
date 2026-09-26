@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}{{ a.title }} · {{ a.company_name }}{% endblock %}
+{% block head %}{% if a.status.value == 'applying' %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
+{% block sub %}<span class="status {{ a.status.value }}">{{ a.status.value.replace('_', ' ') }}</span>{% endblock %}
+{% block body %}
+<div class="panel">
+  <div style="display:flex; gap:12px; align-items:baseline; flex-wrap:wrap">
+    <h2 style="margin:0; font-size:20px">{{ a.title }}</h2>
+    <span class="muted">{{ a.company_name }} · {{ a.location }} · {{ a.ats }}</span>
+    {% if a.score is not none %}<span class="score">fit {{ a.score }}</span>{% endif %}
+    <a href="{{ a.url }}" target="_blank" rel="noopener">posting ↗</a>
+  </div>
+  {% if a.fit_summary %}<p>{{ a.fit_summary }}</p>{% endif %}
+  {% if a.applied_at %}<p class="status applied">Applied {{ a.applied_at.astimezone().strftime("%b %d %Y, %H:%M") }}</p>{% endif %}
+  {% if a.review_reasons %}<ul class="reasons">{% for r in a.review_reasons %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
+  {% if a.error and a.error not in a.review_reasons|join(' ') %}<p class="small" style="color:var(--bad)">{{ a.error }}</p>{% endif %}
+</div>
+
+<form method="post" id="f">
+<div class="actions panel">
+  {% if a.status.value in ('needs_review', 'ready', 'dry_run', 'failed') and a.resume_pdf %}
+    <button class="btn primary" formaction="/a/{{ a.id }}/apply">Apply</button>
+    <button class="btn" formaction="/a/{{ a.id }}/save">Save answers</button>
+  {% endif %}
+  {% if a.status.value in ('low_fit', 'filtered', 'failed') %}
+    <button class="btn" formaction="/a/{{ a.id }}/prepare">Prepare anyway</button>
+  {% endif %}
+  {% if a.status.value == 'applied' %}
+    <button class="btn" formaction="/a/{{ a.id }}/reapply">Apply again</button>
+  {% endif %}
+  {% if a.status.value not in ('applied', 'dismissed', 'applying') %}
+    <button class="btn danger" formaction="/a/{{ a.id }}/dismiss">Dismiss</button>
+  {% endif %}
+  {% if a.screenshot %}<a class="btn" href="/a/{{ a.id }}/screenshot.png" target="_blank">Last screenshot</a>{% endif %}
+  {% if a.status.value == 'applying' %}<span class="muted">Applying… this page refreshes itself.</span>{% endif %}
+</div>
+
+<div class="grid">
+  <div>
+    <div class="panel">
+      <h3 style="margin-top:0">Application answers</h3>
+      {% for ans in a.answers %}
+        <label class="q" for="ans__{{ loop.index0 }}">{{ ans.label }}{% if ans.required %} *{% endif %}
+          <span class="src {% if ans.source in ('llm','llm_choice') or not ans.value %}warn{% endif %}">{{ ans.source }}{% if ans.confidence and ans.source != 'profile' %} {{ ans.confidence }}{% endif %}</span></label>
+        {% if ans.note %}<div class="small" style="color:var(--warn)">{{ ans.note }}</div>{% endif %}
+        {% if ans.type == FieldType.FILE %}
+          <div class="small muted">{% if ans.value == 'resume' %}Tailored resume PDF{% elif ans.value == 'cover_letter' %}Generated cover letter PDF{% else %}—{% endif %}</div>
+        {% elif ans.type == FieldType.TEXTAREA %}
+          <textarea id="ans__{{ loop.index0 }}" name="ans__{{ loop.index0 }}">{{ ans.value or '' }}</textarea>
+        {% elif ans.type == FieldType.MULTISELECT %}
+          <select id="ans__{{ loop.index0 }}" name="ans__{{ loop.index0 }}" multiple size="{{ [ans.options|length, 6]|min }}">
+            {% for o in ans.options %}<option {% if ans.value and o.label in ans.value %}selected{% endif %}>{{ o.label }}</option>{% endfor %}
+          </select>
+        {% elif ans.options or ans.type == FieldType.BOOLEAN %}
+          <select id="ans__{{ loop.index0 }}" name="ans__{{ loop.index0 }}">
+            <option value="">—</option>
+            {% for o in (ans.options or [{'label':'Yes'},{'label':'No'}]) %}<option {% if ans.value == o.label %}selected{% endif %}>{{ o.label }}</option>{% endfor %}
+          </select>
+        {% else %}
+          <input type="text" id="ans__{{ loop.index0 }}" name="ans__{{ loop.index0 }}" value="{{ ans.value or '' }}">
+        {% endif %}
+      {% else %}
+        <p class="muted">No form fields loaded.</p>
+      {% endfor %}
+      {% if a.cover_letter %}
+        <label class="q" for="cover_letter">Cover letter</label>
+        <textarea id="cover_letter" name="cover_letter" style="min-height:220px">{{ a.cover_letter }}</textarea>
+      {% endif %}
+    </div>
+  </div>
+  <div>
+    {% if a.resume_pdf %}
+    <div class="panel"><h3 style="margin-top:0">Tailored resume</h3>
+      <iframe class="pdf" src="/a/{{ a.id }}/resume.pdf" title="Tailored resume"></iframe></div>
+    {% endif %}
+    <details class="panel"><summary><b>Job description</b></summary><pre class="jd">{{ a.jd }}</pre></details>
+  </div>
+</div>
+</form>
+{% endblock %}

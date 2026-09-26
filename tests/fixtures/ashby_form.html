@@ -1,0 +1,18 @@
+<!doctype html>
+<html><body>
+<form>
+  <div class="field"><label for="_systemfield_name">Name</label><input id="_systemfield_name" type="text"></div>
+  <div class="field">
+    <div class="label-wrap"><label>Do you require visa sponsorship?</label></div>
+    <div class="yesno">
+      <button type="button" onclick="this.parentNode.dataset.v='yes'">Yes</button>
+      <button type="button" onclick="this.parentNode.dataset.v='no'">No</button>
+    </div>
+  </div>
+  <fieldset><legend>Preferred team</legend>
+    <label><input type="radio" name="team" value="core"> Core</label>
+    <label><input type="radio" name="team" value="growth"> Growth</label>
+  </fieldset>
+  <button type="submit">Submit Application</button>
+</form>
+</body></html>

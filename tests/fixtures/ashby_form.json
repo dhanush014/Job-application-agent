@@ -1,0 +1,10 @@
+{"data": {"jobPosting": {"id": "0b1c2d3e-aaaa-bbbb-cccc-000000000001", "title": "Backend Engineer", "applicationForm": {"sections": [
+  {"title": null, "fieldEntries": [
+    {"id": "e1", "isRequired": true, "descriptionHtml": null, "field": {"path": "_systemfield_name", "title": "Name", "type": "String"}},
+    {"id": "e2", "isRequired": true, "descriptionHtml": null, "field": {"path": "_systemfield_email", "title": "Email", "type": "Email"}},
+    {"id": "e3", "isRequired": true, "descriptionHtml": null, "field": {"path": "_systemfield_resume", "title": "Resume", "type": "File"}},
+    {"id": "e4", "isRequired": true, "descriptionHtml": null, "field": {"path": "q_sponsor", "title": "Do you require visa sponsorship?", "type": "Boolean"}},
+    {"id": "e5", "isRequired": false, "descriptionHtml": null, "field": {"path": "q_level", "title": "Preferred team", "type": "ValueSelect",
+      "selectableValues": [{"label": "Core", "value": "core"}, {"label": "Growth", "value": "growth"}]}}
+  ]}
+]}}}}

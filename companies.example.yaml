@@ -1,0 +1,14 @@
+# Companies to watch. slug = the part of the board URL:
+#   greenhouse: https://job-boards.greenhouse.io/<slug>   (or boards.greenhouse.io/<slug>)
+#   ashby:      https://jobs.ashbyhq.com/<slug>
+# ~500+ companies are needed to find 50 good-fit new jobs a day.
+companies:
+  - {ats: greenhouse, slug: stripe, name: Stripe}
+  - {ats: greenhouse, slug: airbnb, name: Airbnb}
+  - {ats: greenhouse, slug: figma, name: Figma}
+  - {ats: greenhouse, slug: databricks, name: Databricks}
+  - {ats: greenhouse, slug: discord, name: Discord}
+  - {ats: ashby, slug: ramp, name: Ramp}
+  - {ats: ashby, slug: notion, name: Notion}
+  - {ats: ashby, slug: linear, name: Linear}
+  - {ats: ashby, slug: openai, name: OpenAI}

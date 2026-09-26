@@ -1,0 +1,59 @@
+# Your answers to application questions.
+# profile: plain fields filled everywhere.
+# questions: `match` phrases are fuzzy-matched against each question's label.
+#   Sensitive questions (work authorization, sponsorship, salary, EEO, relocation,
+#   criminal history, ...) are ONLY ever answered from this file. If one is missing,
+#   that application waits in the review queue for you.
+#   For multiple choice, write the answer as it appears in the options (or Yes / No).
+
+profile:
+  first_name: Alex
+  last_name: Rivera
+  preferred_name: Alex
+  email: alex.rivera@example.com
+  phone: "+1 555 010 2030"
+  location: San Francisco, CA
+  linkedin: https://linkedin.com/in/alexrivera
+  github: https://github.com/alexrivera
+  website: https://alexrivera.dev
+  current_company: Stripe
+  current_title: Software Engineer II
+
+questions:
+  - match: ["legally authorized to work", "authorized to work in the united states", "eligible to work", "right to work"]
+    answer: "Yes"
+  - match: ["require sponsorship", "visa sponsorship", "require visa", "sponsorship now or in the future", "need sponsorship"]
+    answer: "No"
+  - match: ["willing to relocate", "open to relocation", "relocate"]
+    answer: "Yes"
+  - match: ["salary expectation", "expected salary", "desired compensation", "compensation expectation", "salary requirements"]
+    answer: "Open to discussing; targeting a competitive offer for the level and location"
+  - match: ["notice period", "earliest start date", "when can you start", "start date"]
+    answer: "Two weeks after accepting an offer"
+  - match: ["how did you hear", "where did you hear", "how did you find"]
+    answer: "Company website"
+  - match: ["previously worked for", "previously been employed", "former employee", "worked here before"]
+    answer: "No"
+  - match: ["in person", "in office", "hybrid", "work onsite", "on-site"]
+    answer: "Yes"
+  - match: ["government official", "related to anyone", "relative who works"]
+    answer: "No"
+  - match: ["security clearance"]
+    answer: "No"
+  - match: ["export control", "itar", "u.s. person"]
+    answer: "Yes"
+  # Voluntary self-identification (EEO). Options differ per company; the
+  # closest option to your answer is picked.
+  - match: ["gender"]
+    answer: "Decline to self-identify"
+  - match: ["hispanic", "latino"]
+    answer: "Decline to self-identify"
+  - match: ["race", "ethnicity"]
+    answer: "Decline to self-identify"
+  - match: ["veteran"]
+    answer: "I don't wish to answer"
+  - match: ["disability"]
+    answer: "I do not want to answer"
+  - match: ["pronouns"]
+    answer: "he/him"
+    private: true   # never shown to the LLM as profile context

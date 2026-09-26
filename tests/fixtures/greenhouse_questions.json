@@ -1,0 +1,25 @@
+{"id": 5001, "title": "Senior Software Engineer, Payments Platform",
+ "questions": [
+  {"required": true, "label": "First Name", "description": null, "fields": [{"name": "first_name", "type": "input_text", "values": []}]},
+  {"required": true, "label": "Last Name", "description": null, "fields": [{"name": "last_name", "type": "input_text", "values": []}]},
+  {"required": true, "label": "Email", "description": null, "fields": [{"name": "email", "type": "input_text", "values": []}]},
+  {"required": false, "label": "Phone", "description": null, "fields": [{"name": "phone", "type": "input_text", "values": []}]},
+  {"required": true, "label": "Resume/CV", "description": null, "fields": [{"name": "resume", "type": "input_file", "values": []}, {"name": "resume_text", "type": "textarea", "values": []}]},
+  {"required": false, "label": "Cover Letter", "description": null, "fields": [{"name": "cover_letter", "type": "input_file", "values": []}, {"name": "cover_letter_text", "type": "textarea", "values": []}]},
+  {"required": false, "label": "LinkedIn Profile", "description": null, "fields": [{"name": "question_1001", "type": "input_text", "values": []}]},
+  {"required": true, "label": "Are you legally authorized to work in the United States?", "description": null,
+   "fields": [{"name": "question_1002", "type": "multi_value_single_select", "values": [{"label": "Yes", "value": 1}, {"label": "No", "value": 0}]}]},
+  {"required": true, "label": "Will you now or in the future require visa sponsorship?", "description": null,
+   "fields": [{"name": "question_1003", "type": "multi_value_single_select", "values": [{"label": "Yes", "value": 1}, {"label": "No", "value": 0}]}]},
+  {"required": true, "label": "Why do you want to work at Acme?", "description": null, "fields": [{"name": "question_1004", "type": "textarea", "values": []}]},
+  {"required": true, "label": "Which of these languages have you used professionally?", "description": null,
+   "fields": [{"name": "question_1005", "type": "multi_value_multi_select", "values": [{"label": "Go", "value": 1}, {"label": "Rust", "value": 2}, {"label": "Haskell", "value": 3}]}]},
+  {"required": true, "label": "Do you have an active TS/SCI security clearance?", "description": null,
+   "fields": [{"name": "question_1006", "type": "multi_value_single_select", "values": [{"label": "Yes", "value": 1}, {"label": "No", "value": 0}]}]},
+  {"required": false, "label": "hidden", "fields": [{"name": "question_1007", "type": "input_hidden", "values": []}]}
+ ],
+ "location_questions": [],
+ "compliance": [{"type": "eeoc", "questions": [
+   {"required": false, "label": "Gender", "fields": [{"name": "gender", "type": "multi_value_single_select", "values": [{"label": "Male", "value": 1}, {"label": "Female", "value": 2}, {"label": "Decline To Self Identify", "value": 3}]}]}
+ ]}]
+}

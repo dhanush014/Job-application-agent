@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block head %}{% if applying %}<meta http-equiv="refresh" content="10">{% endif %}{% endblock %}
+{% block sub %}{{ applied_today }} / {{ cfg.apply.daily_limit }} applied today{% if cfg.apply.dry_run %} · dry-run mode{% endif %}{% endblock %}
+{% block body %}
+<div class="tabs">
+  {% for s, name in tabs %}
+  <a class="tab {% if s == current %}on{% endif %}" href="/?status={{ s.value }}">{{ name }}<span class="n">{{ counts.get(s, 0) }}</span></a>
+  {% endfor %}
+</div>
+{% if rows and current.value in ('needs_review', 'ready', 'dry_run') %}
+<form method="post" action="/bulk-apply" style="margin-bottom:12px"
+      onsubmit="return confirm('Apply to all {{ rows|length }} jobs in this tab?')">
+  <input type="hidden" name="status" value="{{ current.value }}">
+  <button class="btn primary">Apply to all {{ rows|length }}</button>
+</form>
+{% endif %}
+{% if rows %}
+<table>
+  <thead><tr><th>Score</th><th>Role</th><th>Company</th><th>Location</th><th>{% if current.value == 'applied' %}Applied{% else %}Why here{% endif %}</th></tr></thead>
+  <tbody>
+  {% for a in rows %}
+  <tr>
+    <td class="score">{{ a.score if a.score is not none else "–" }}</td>
+    <td><a href="/a/{{ a.id }}">{{ a.title }}</a>{% if a.attempt > 1 %} <span class="src">attempt {{ a.attempt }}</span>{% endif %}</td>
+    <td>{{ a.company_name }}</td>
+    <td class="muted">{{ a.location }}</td>
+    <td class="small">
+      {% if a.applied_at %}{{ a.applied_at.astimezone().strftime("%b %d, %H:%M") }}
+      {% elif a.review_reasons %}{{ a.review_reasons[0] }}{% if a.review_reasons|length > 1 %} <span class="muted">+{{ a.review_reasons|length - 1 }}</span>{% endif %}
+      {% elif a.error %}{{ a.error }}{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="panel muted">Nothing here.</div>
+{% endif %}
+{% endblock %}

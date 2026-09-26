@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+# personal data and secrets — never commit
+.env
+config.yaml
+companies.yaml
+profile/
+data/

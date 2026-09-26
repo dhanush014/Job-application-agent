@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jobagent"
+version = "0.1.0"
+description = "Auto-apply agent for Greenhouse and Ashby job boards, powered by Groq."
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.6",
+  "pyyaml>=6",
+  "httpx>=0.27",
+  "groq>=0.9",
+  "typst>=0.13",
+  "pypdf>=4",
+  "rapidfuzz>=3",
+  "playwright>=1.45",
+  "fastapi>=0.110",
+  "uvicorn>=0.29",
+  "jinja2>=3.1",
+  "python-multipart>=0.0.9",
+  "typer>=0.12",
+  "openpyxl>=3.1",
+]
+
+[project.optional-dependencies]
+supabase = ["supabase>=2.4"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+jobagent = "jobagent.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+jobagent = ["resume/*.typ", "web/templates/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

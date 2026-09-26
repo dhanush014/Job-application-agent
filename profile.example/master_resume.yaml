@@ -1,0 +1,130 @@
+# Master resume: the single source of truth. Put EVERY bullet you might ever
+# want here (10+ per role is fine). The agent picks and reorders; the fitter
+# guarantees the result is exactly one page. Bullet ids must be unique.
+contact:
+  name: Alex Rivera
+  email: alex.rivera@example.com
+  phone: "+1 (555) 010-2030"
+  location: San Francisco, CA
+  links:
+    - {label: linkedin.com/in/alexrivera, url: "https://linkedin.com/in/alexrivera"}
+    - {label: github.com/alexrivera, url: "https://github.com/alexrivera"}
+
+education:
+  - school: University of California, Berkeley
+    degree: B.S. Electrical Engineering and Computer Sciences
+    location: Berkeley, CA
+    start: Aug 2016
+    end: May 2020
+    details: ["Coursework: Distributed Systems, Databases, Operating Systems, Machine Learning"]
+
+roles:
+  - id: stripe
+    company: Stripe
+    title: Software Engineer II
+    location: San Francisco, CA
+    start: Jul 2022
+    end: Present
+    min_bullets: 3
+    bullets:
+      - id: stripe-1
+        text: Built a real-time fraud feature pipeline in Go and Kafka (40K events/sec), cutting feature latency from 2s to 150ms.
+        skills: [Go, Kafka]
+      - id: stripe-2
+        text: Led migration of the payouts ledger from MySQL to a sharded Postgres cluster with zero downtime across 12 services.
+        skills: [PostgreSQL, MySQL]
+      - id: stripe-3
+        text: Designed an idempotent retry framework for payment webhooks, reducing duplicate-charge incidents by 90%.
+        skills: [Go, Distributed Systems]
+      - id: stripe-4
+        text: Owned on-call for the payouts platform (99.99% SLO); wrote 15 runbooks and cut mean time to recovery by 35%.
+        skills: [SRE]
+      - id: stripe-5
+        text: Shipped a TypeScript/React payout reconciliation dashboard adopted by 8,000 merchants in its first quarter.
+        skills: [TypeScript, React]
+      - id: stripe-6
+        text: Mentored 3 new-grad engineers and ran the team's design review process for 18 months.
+        skills: [Mentorship]
+      - id: stripe-7
+        text: Introduced OpenTelemetry tracing across payout services so p99 latency regressions surface within minutes of a deploy.
+        skills: [OpenTelemetry, Observability]
+      - id: stripe-9
+        text: Built a Kafka-based change-data-capture feed from the ledger that powers 4 downstream analytics teams.
+        skills: [Kafka, Data Engineering]
+      - id: stripe-10
+        text: Partnered with compliance to automate payout holds for sanctioned regions, removing a 2-day manual review queue.
+        skills: [Go]
+      - id: stripe-8
+        text: Cut AWS spend for batch reconciliation by $400K/year by moving jobs to spot instances with checkpointing.
+        skills: [AWS]
+
+  - id: airbnb
+    company: Airbnb
+    title: Software Engineer
+    location: San Francisco, CA
+    start: Aug 2020
+    end: Jun 2022
+    min_bullets: 2
+    bullets:
+      - id: airbnb-1
+        text: Built search ranking features in Python and Spark over 2B daily events, improving booking conversion by 1.8%.
+        skills: [Python, Spark]
+      - id: airbnb-2
+        text: Developed a Kotlin microservice for dynamic pricing suggestions serving 5K requests/sec at 30ms p99.
+        skills: [Kotlin, Microservices]
+      - id: airbnb-3
+        text: Created an A/B test analysis library used by 40+ engineers, standardizing metrics and sequential testing.
+        skills: [Python, Experimentation]
+      - id: airbnb-4
+        text: Migrated 20 Airflow DAGs to a shared data platform, cutting pipeline failures by 60%.
+        skills: [Airflow, Data Engineering]
+      - id: airbnb-5
+        text: Implemented GraphQL APIs for the host calendar, replacing 6 REST endpoints and reducing client payloads by 45%.
+        skills: [GraphQL]
+      - id: airbnb-6
+        text: Containerized 9 legacy services with Docker and moved them to Kubernetes, halving deploy time.
+        skills: [Docker, Kubernetes]
+      - id: airbnb-7
+        text: Wrote Terraform modules for service infrastructure that became the team default for new services.
+        skills: [Terraform]
+
+  - id: intern
+    company: Twilio
+    title: Software Engineering Intern
+    location: San Francisco, CA
+    start: May 2019
+    end: Aug 2019
+    min_bullets: 1
+    bullets:
+      - id: twilio-1
+        text: Built a Python load-testing tool for the SMS API that found 3 capacity bottlenecks before a major launch.
+        skills: [Python]
+      - id: twilio-2
+        text: Added Prometheus metrics and Grafana dashboards for the message queue consumers.
+        skills: [Prometheus, Grafana]
+
+projects:
+  - id: kvstore
+    name: Raft-based Key-Value Store
+    link: github.com/alexrivera/raftkv
+    min_bullets: 0
+    bullets:
+      - id: kv-1
+        text: Implemented Raft consensus in Rust with log compaction and snapshotting; passes Jepsen-style linearizability tests.
+        skills: [Rust, Distributed Systems]
+      - id: kv-2
+        text: Benchmarked at 120K writes/sec on a 5-node cluster with a custom batching layer.
+        skills: [Rust]
+  - id: llmtool
+    name: Open-source LLM Eval Harness
+    link: github.com/alexrivera/evalkit
+    min_bullets: 0
+    bullets:
+      - id: llm-1
+        text: Built a Python harness for evaluating LLM prompts against golden datasets; 900 GitHub stars.
+        skills: [Python, LLMs]
+
+skills:
+  Languages: [Go, Python, TypeScript, Kotlin, Rust, SQL, Java]
+  Infrastructure: [Kafka, PostgreSQL, MySQL, AWS, Kubernetes, Docker, Terraform, Airflow, Spark]
+  Tools: [React, GraphQL, OpenTelemetry, Prometheus, Grafana, Git, Linux]

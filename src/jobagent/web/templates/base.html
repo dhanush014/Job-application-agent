@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}jobagent{% endblock %}</title>
+{% block head %}{% endblock %}
+<style>
+:root { --bg:#f7f7f5; --panel:#fff; --text:#1c1c1a; --muted:#6b6b66; --line:#e3e2dd;
+  --accent:#2f6fde; --accent-text:#fff; --ok:#1f8a4c; --warn:#b26a00; --bad:#c23b32; --chip:#efeeea; }
+@media (prefers-color-scheme: dark) { :root { --bg:#161615; --panel:#1f1f1d; --text:#ecebe6;
+  --muted:#9c9b95; --line:#33322f; --accent:#5b8ff0; --ok:#46b779; --warn:#e0a040; --bad:#e8675e; --chip:#2a2a27; } }
+* { box-sizing:border-box } body { margin:0; background:var(--bg); color:var(--text);
+  font:14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color:var(--accent); text-decoration:none } a:hover { text-decoration:underline }
+header { display:flex; gap:16px; align-items:center; padding:14px 20px; border-bottom:1px solid var(--line); background:var(--panel); flex-wrap:wrap }
+header h1 { font-size:16px; margin:0 } header .sp { flex:1 }
+main { max-width:1200px; margin:0 auto; padding:20px 16px }
+.tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px }
+.tab { padding:6px 12px; border-radius:999px; background:var(--chip); color:var(--text) }
+.tab.on { background:var(--accent); color:var(--accent-text) }
+.tab .n { opacity:.7; margin-left:4px }
+table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden }
+th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top }
+th { font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.03em }
+tr:last-child td { border-bottom:0 }
+.muted { color:var(--muted) } .small { font-size:12px }
+.score { font-variant-numeric:tabular-nums; font-weight:600 }
+.btn { display:inline-block; border:1px solid var(--line); background:var(--panel); color:var(--text);
+  padding:7px 14px; border-radius:6px; cursor:pointer; font:inherit }
+.btn.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-text); font-weight:600 }
+.btn.danger { color:var(--bad) }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:16px }
+.reasons { margin:0; padding-left:18px; color:var(--warn) }
+.grid { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap:16px }
+@media (max-width: 900px) { .grid { grid-template-columns: minmax(0,1fr) } }
+label.q { display:block; font-weight:600; margin:14px 0 4px }
+input[type=text], textarea, select { width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:6px;
+  background:var(--bg); color:var(--text); font:inherit }
+textarea { min-height:90px }
+.src { font-size:11px; padding:1px 6px; border-radius:4px; background:var(--chip); color:var(--muted); margin-left:6px; font-weight:400 }
+.src.warn { color:var(--warn) }
+iframe.pdf { width:100%; height:820px; border:1px solid var(--line); border-radius:6px; background:#fff }
+pre.jd { white-space:pre-wrap; font:13px/1.5 system-ui, sans-serif; max-height:480px; overflow:auto }
+.actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center }
+.status { font-weight:600 } .status.applied { color:var(--ok) } .status.needs_review { color:var(--warn) } .status.failed { color:var(--bad) }
+</style>
+</head>
+<body>
+<header>
+  <h1><a href="/" style="color:inherit">jobagent</a></h1>
+  <span class="muted small">{% block sub %}{% endblock %}</span>
+  <span class="sp"></span>
+  <form method="post" action="/run"><button class="btn">Run now</button></form>
+  <a class="btn" href="/export.xlsx">Export Excel</a>
+</header>
+<main>{% block body %}{% endblock %}</main>
+</body>
+</html>

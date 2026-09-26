@@ -1,0 +1,9 @@
+{"jobs": [
+  {"id": 5001, "title": "Senior Software Engineer, Payments Platform", "updated_at": "2026-09-20T10:00:00-04:00",
+   "first_published": "2026-09-18T10:00:00-04:00", "location": {"name": "San Francisco, CA"},
+   "absolute_url": "https://acme.com/careers?gh_jid=5001", "company_name": "Acme",
+   "content": "&lt;p&gt;We are hiring a backend engineer to build &lt;strong&gt;payments&lt;/strong&gt; infrastructure.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Go, Kafka, PostgreSQL&lt;/li&gt;&lt;li&gt;Experience with Kubernetes&lt;/li&gt;&lt;/ul&gt;"},
+  {"id": 5002, "title": "Engineering Manager, Growth", "updated_at": "2026-09-20T10:00:00-04:00",
+   "first_published": "2026-09-18T10:00:00-04:00", "location": {"name": "New York, NY"},
+   "absolute_url": "https://acme.com/careers?gh_jid=5002", "content": "&lt;p&gt;Lead a team.&lt;/p&gt;"}
+], "meta": {"total": 2}}
