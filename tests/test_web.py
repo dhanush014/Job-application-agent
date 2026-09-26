@@ -39,3 +39,18 @@ def test_dashboard_review_edit_and_one_click_apply(cfg, store):
     assert edited.value == "Because I love payments." and edited.source == "user"
     assert sub.calls[-1][2] is False  # real submit, not dry run
     assert client.get("/export.xlsx").status_code == 200
+
+
+def test_editing_cover_letter_rerenders_pdf(cfg, store):
+    from pypdf import PdfReader
+
+    p = Pipeline(cfg, store, FakeLLM(), http=mock_http())
+    p.run(submit=False)
+    a = next(x for x in store.list() if x.job_id == "5001")
+    client = TestClient(create_app(p))
+    new = "Dear Hiring Team,\n\nI would love to build payments with you at Acme.\n\nAlex Rivera"
+    client.post(f"/a/{a.id}/save", data={"cover_letter": new})
+    b = store.get(a.id)
+    assert b.cover_letter == new
+    assert "love to build payments" in PdfReader(b.cover_letter_pdf).pages[0].extract_text()
+    assert "Cover letter" in client.get(f"/a/{a.id}").text

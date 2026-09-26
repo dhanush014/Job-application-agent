@@ -110,3 +110,19 @@ def test_stuck_applying_is_recovered(cfg, store):
     assert p.recover_stuck(older_than_minutes=30) == 0  # fresh, still in flight
     assert p.recover_stuck(older_than_minutes=-1) == 1
     assert store.get(a.id).status == Status.NEEDS_REVIEW
+
+
+def test_cover_letter_written_rendered_and_attached(cfg, store):
+    from pathlib import Path
+
+    from pypdf import PdfReader
+
+    p, _ = make(cfg, store)
+    p.run(submit=False)
+    gh = next(a for a in store.list() if a.job_id == "5001")
+    assert gh.cover_letter and gh.cover_letter.startswith("Dear Hiring Team")
+    assert Path(gh.cover_letter_pdf).exists()
+    pdf = PdfReader(gh.cover_letter_pdf)
+    text = pdf.pages[0].extract_text()
+    assert len(pdf.pages) == 1 and "Alex Rivera" in text and "Acme" in text
+    assert next(a for a in gh.answers if a.field == "cover_letter").value == "cover_letter"

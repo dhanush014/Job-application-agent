@@ -39,10 +39,17 @@
     )
     #if bullets.len() > 0 {
       v(0.08em * k)
-      list(..bullets.map(b => [#b]))
+      list(..bullets)
     }
   ]
 }
+
+// Bullet text with its skill keywords in bold (runs come pre-split from Python).
+#let rich(e) = range(e.bullets.len()).map(i => {
+  if e.segments.len() > i {
+    e.segments.at(i).map(x => if x.b { strong(x.t) } else { text(x.t) }).join()
+  } else { [#e.bullets.at(i)] }
+})
 
 #let contact-line = {
   let parts = (data.contact.location, data.contact.phone, link("mailto:" + data.contact.email, data.contact.email))
@@ -62,14 +69,14 @@
 #section("Education")
 #for e in data.education {
   let dates = if e.start != "" { e.start + " – " + e.end } else { e.end }
-  entry(e.school, dates, e.degree, e.location, e.details)
+  entry(e.school, dates, e.degree, e.location, e.details.map(d => [#d]))
 }
 
 // ---- Experience ----
 #gap()
 #section("Experience")
 #for r in data.roles {
-  entry(r.heading, r.dates, r.subheading, r.location, r.bullets)
+  entry(r.heading, r.dates, r.subheading, r.location, rich(r))
 }
 
 // ---- Projects ----
@@ -77,7 +84,7 @@
   gap()
   section("Projects")
   for p in data.projects {
-    entry(p.heading, p.dates, p.subheading, p.location, p.bullets)
+    entry(p.heading, p.dates, p.subheading, p.location, rich(p))
   }
 }
 
@@ -97,7 +104,7 @@
   let bullets = ()
   for grp in (data.roles, data.projects) {
     for e in grp {
-      for b in e.bullets { bullets.push(measure([#b]).width / avail) }
+      for b in rich(e) { bullets.push(measure(b).width / avail) }
     }
   }
   [#metadata((

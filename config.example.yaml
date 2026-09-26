@@ -25,6 +25,8 @@ apply:
   allow_reapply: true      # re-apply to a job you already applied to...
   reapply_after_days: 30   # ...once this many days have passed (or click "Apply again")
   min_answer_confidence: 70
+  cover_letter: when_asked # when_asked: write + upload one whenever the form has a cover letter field
+                           # when_required: only when it's required; never: only if required
   browser_executable: null # path to Chrome/Chromium if Playwright's bundled one isn't installed
   manual_finish_seconds: 600
 

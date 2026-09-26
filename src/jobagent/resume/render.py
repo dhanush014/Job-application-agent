@@ -31,7 +31,7 @@ from pathlib import Path
 import typst
 from pypdf import PdfReader
 
-from ..models import DocEntry, Layout, MasterResume, ResumeDoc, SkillLine
+from ..models import Contact, DocEntry, Layout, MasterResume, ResumeDoc, Segment, SkillLine
 
 BASE_FONT = 1 / 3  # 10pt
 MIN_FONT = 0.0  # 9.5pt
@@ -41,6 +41,7 @@ SKILL_LINE_CHARS = 100  # conservative one-line budget at 10pt
 PAGE_HEIGHT_PT = 792.0
 MARGIN_PT = 0.45 * 72
 MIN_FILL = 0.85  # natural fill (before stretching) below this gets a warning
+MAX_BOLD_PER_BULLET = 2
 # A wrapped bullet whose last line is under this fraction of the width leaves
 # an ugly one-or-two-word "dangling" line.
 DANGLING_FRACTION = 0.22
@@ -167,37 +168,78 @@ def _skill_lines(master: MasterResume, order: list[str], font: float) -> list[Sk
     return lines
 
 
+def _find(term: str, text: str) -> re.Match | None:
+    # short terms ("Go", "SQL") must match case exactly so the verb "go" stays plain
+    flags = 0 if len(term) <= 3 else re.I
+    return re.search(rf"(?<![\w+#]){re.escape(term)}(?![\w+#])", text, flags)
+
+
+def bold_segments(text: str, terms: list[str], limit: int = MAX_BOLD_PER_BULLET) -> list[Segment]:
+    """Split `text` into runs, bolding up to `limit` of `terms` (in priority order)."""
+    spans: list[tuple[int, int]] = []
+    for term in terms:
+        if len(spans) >= limit:
+            break
+        m = _find(term, text) if term.strip() else None
+        if m and not any(m.start() < e and s < m.end() for s, e in spans):
+            spans.append((m.start(), m.end()))
+    out, pos = [], 0
+    for s, e in sorted(spans):
+        if s > pos:
+            out.append(Segment(t=text[pos:s]))
+        out.append(Segment(t=text[s:e], b=True))
+        pos = e
+    if pos < len(text):
+        out.append(Segment(t=text[pos:]))
+    return out
+
+
 def build_doc(
     master: MasterResume,
     chosen: list[str],
     texts: dict[str, str] | None = None,
     skills_order: list[str] | None = None,
     layout: Layout | None = None,
+    bold_priority: list[str] | None = None,
+    no_bold: set[str] | None = None,
 ) -> ResumeDoc:
-    """`chosen` is in relevance order; bullets appear most-relevant-first per role."""
+    """`chosen` is in relevance order; bullets appear most-relevant-first per role.
+
+    Skills are bolded inside bullets: only real skills (your master skill list
+    or the bullet's own tags), preferring those in `bold_priority` (the job's
+    keywords) when given, at most two per bullet.
+    """
     texts = texts or {}
     layout = layout or Layout()
     rank = {bid: i for i, bid in enumerate(chosen)}
     index = master.bullet_index()
+    vocab = {s.lower() for s in master.all_skills()}
 
-    def bullets_for(bs) -> list[str]:
+    def terms_for(b) -> list[str]:
+        if no_bold and b.id in no_bold:
+            return []
+        own = {t.lower() for t in b.skills}
+        if bold_priority:
+            return [t for t in bold_priority if t.lower() in vocab | own]
+        return list(b.skills)
+
+    def entry_bullets(bs):
         picked = sorted((b for b in bs if b.id in rank), key=lambda b: rank[b.id])
-        return [texts.get(b.id, index[b.id].text) for b in picked]
+        plain = [texts.get(b.id, index[b.id].text) for b in picked]
+        segs = [bold_segments(t, terms_for(b)) for t, b in zip(plain, picked)]
+        return plain, segs, [b.id for b in picked]
 
-    roles = [
-        DocEntry(
-            heading=r.company,
-            subheading=r.title,
-            location=r.location,
-            dates=f"{r.start} – {r.end}",
-            bullets=bullets_for(r.bullets),
-        )
-        for r in master.roles
-    ]
-    projects = [
-        DocEntry(heading=p.name, subheading=p.link, bullets=bullets_for(p.bullets))
-        for p in master.projects
-    ]
+    roles = []
+    for r in master.roles:
+        plain, segs, ids = entry_bullets(r.bullets)
+        roles.append(DocEntry(
+            heading=r.company, subheading=r.title, location=r.location,
+            dates=f"{r.start} – {r.end}", bullets=plain, segments=segs, ids=ids,
+        ))
+    projects = []
+    for p in master.projects:
+        plain, segs, ids = entry_bullets(p.bullets)
+        projects.append(DocEntry(heading=p.name, subheading=p.link, bullets=plain, segments=segs, ids=ids))
     projects = [p for p in projects if p.bullets]
     return ResumeDoc(
         contact=master.contact,
@@ -238,29 +280,45 @@ def fit(
     ranking: list[str],
     texts: dict[str, str] | None = None,
     skills_order: list[str] | None = None,
+    bold_priority: list[str] | None = None,
 ) -> FitResult:
-    """Fit to one full page. Rewritten bullets that still leave a dangling
-    last line are reverted to the master wording and the page is re-fitted."""
+    """Fit to one full page. When a bullet ends in a dangling last line, first
+    revert an LLM rewrite to the master wording, then drop that bullet's bold
+    (bold is wider), and re-fit. Leftovers are master bullets to shorten."""
     texts = dict(texts or {})
-    res = _fit_once(master, ranking, texts, skills_order)
     index = master.bullet_index()
-    by_text = {texts.get(b, index[b].text): b for b in res.included}
-    reverted = []
-    for i in res.render.dangling():
-        bid = by_text.get(doc_bullets(res.doc)[i])
-        if bid and bid in texts and texts[bid] != index[bid].text:
-            texts.pop(bid)
-            reverted.append(bid)
+    no_bold: set[str] = set()
+    reverted = unbolded = 0
+    for _ in range(4):
+        res = _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold)
+        ids = doc_ids(res.doc)
+        segs = [s for e in res.doc.roles + res.doc.projects for s in e.segments]
+        changed = False
+        for i in res.render.dangling():
+            bid = ids[i]
+            if bid in texts and texts[bid] != index[bid].text:
+                texts.pop(bid)
+                reverted += 1
+                changed = True
+            elif bid not in no_bold and any(x.b for x in segs[i]):
+                no_bold.add(bid)
+                unbolded += 1
+                changed = True
+        if not changed:
+            break
     if reverted:
-        res = _fit_once(master, ranking, texts, skills_order)
-        res.warnings.append(f"reverted {len(reverted)} rewrite(s) that left a dangling line")
+        res.warnings.append(f"reverted {reverted} rewrite(s) that left a dangling line")
     bullets = doc_bullets(res.doc)
     for i in res.render.dangling():
         res.warnings.append(f"dangling last line (shorten this master bullet): {bullets[i][:60]}…")
     return res
 
 
-def _fit_once(master, ranking, texts, skills_order) -> FitResult:
+def doc_ids(doc: ResumeDoc) -> list[str]:
+    return [i for e in doc.roles + doc.projects for i in e.ids]
+
+
+def _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold) -> FitResult:
     owner = master.owner_of()
     ranking = [b for b in ranking if b in owner]
     # bullets the LLM forgot about still compete, at the bottom of the ranking
@@ -278,7 +336,7 @@ def _fit_once(master, ranking, texts, skills_order) -> FitResult:
         if key not in cache:
             keep = set(required) | set(optional[:n])
             doc = build_doc(master, [b for b in ranking if b in keep], texts, skills_order,
-                            Layout(font=font, spacing=spacing, stretch=stretch))
+                            Layout(font=font, spacing=spacing, stretch=stretch), bold_priority, no_bold)
             cache[key] = (doc, render(doc))
         return cache[key]
 
@@ -353,21 +411,28 @@ def save_pdf(result: RenderResult, path: Path) -> Path:
     return path
 
 
-def render_text_pdf(title: str, body: str, path: Path) -> Path:
-    """Plain one-page letter PDF (used for cover letters when a file is required)."""
+def render_cover_letter(contact: Contact, title: str, company: str, body: str, path: Path) -> Path:
+    """One-page cover letter PDF that matches the resume header."""
+    from datetime import date
+
+    paragraphs = [
+        [" ".join(line.split()) for line in p.splitlines() if line.strip()]
+        for p in re.split(r"\n\s*\n", body.strip())
+        if p.strip()
+    ]
+    data = {
+        "contact": contact.model_dump(mode="json"),
+        "title": title,
+        "company": company,
+        "date": date.today().strftime("%B %-d, %Y"),
+        "paragraphs": paragraphs,
+    }
     with tempfile.TemporaryDirectory() as tmp:
-        tmpd = Path(tmp)
-        (tmpd / "d.json").write_text(json.dumps({"title": title, "body": body}))
-        src = tmpd / "cl.typ"
-        src.write_text(
-            '#let d = json("d.json")\n'
-            '#set page(paper: "us-letter", margin: 1in)\n'
-            '#set text(font: "New Computer Modern", size: 11pt)\n'
-            "#set par(spacing: 1em)\n"
-            "#text(weight: \"bold\", d.title)\n\n"
-            '#for p in d.body.split("\\n\\n") [#p\n\n]\n'
-        )
-        pdf = typst.compile(str(src))
+        src = Path(tmp) / "cover.typ"
+        src.write_text(resources.files("jobagent.resume").joinpath("cover.typ").read_text())
+        pdf = typst.compile(str(src), sys_inputs={"data": json.dumps(data)})
+    if len(PdfReader(io.BytesIO(pdf)).pages) != 1:
+        raise ValueError("cover letter is longer than one page")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(pdf)
     return path

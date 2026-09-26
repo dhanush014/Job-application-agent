@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from ..answers import review_reasons
+from ..answers import is_cover_answer, review_reasons
 from ..models import Application, FieldType, Status
 from ..pipeline import Pipeline
 
@@ -75,7 +75,10 @@ def create_app(pipeline: Pipeline) -> FastAPI:
     @app.get("/a/{app_id}", response_class=HTMLResponse)
     def detail(request: Request, app_id: str):
         a = get_or_404(app_id)
-        return templates.TemplateResponse(request, "detail.html", {"a": a, "FieldType": FieldType, "Status": Status})
+        has_cover = any(is_cover_answer(x) for x in a.answers)
+        return templates.TemplateResponse(
+            request, "detail.html", {"a": a, "FieldType": FieldType, "Status": Status, "has_cover": has_cover}
+        )
 
     async def _save_answers(request: Request, a: Application) -> None:
         form = await request.form()
@@ -90,7 +93,17 @@ def create_app(pipeline: Pipeline) -> FastAPI:
             if new != ans.value:
                 ans.value, ans.source, ans.confidence, ans.note = new, "user", 100, ""
         if "cover_letter" in form:
-            a.cover_letter = (form.get("cover_letter") or "").strip() or a.cover_letter
+            new_cl = (form.get("cover_letter") or "").strip() or None
+            if new_cl != a.cover_letter:
+                a.cover_letter = new_cl
+                for ans in a.answers:  # a letter you wrote fills fields that were left empty
+                    if new_cl and is_cover_answer(ans) and ans.value is None:
+                        if ans.type == FieldType.FILE:
+                            ans.value, ans.source, ans.confidence = "cover_letter", "file", 100
+                        elif ans.type == FieldType.TEXTAREA:
+                            ans.note = "cover letter"
+                a.review_reasons = [r for r in a.review_reasons if not r.startswith("cover letter PDF")]
+                a.review_reasons += pipeline.attach_cover_letter(a)
         other = [r for r in a.review_reasons if not r.startswith(ANSWER_REASON_PREFIXES)]
         a.review_reasons = other + review_reasons(a.answers, cfg.apply.min_answer_confidence)
         store.save(a)

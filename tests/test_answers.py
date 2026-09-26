@@ -22,7 +22,7 @@ def test_greenhouse_form_answers():
     by = {a.field: a for a in answers}
     assert by["first_name"].value == "Alex" and by["first_name"].source == "profile"
     assert by["resume"].value == "resume"
-    assert by["cover_letter"].value is None and not needs_cover  # optional -> skipped
+    assert by["cover_letter"].value == "cover_letter" and needs_cover  # optional, but asked for -> attach
     assert by["question_1001"].value == "https://linkedin.com/in/alexrivera"
     assert by["question_1002"].value == "Yes" and by["question_1002"].source == "bank"
     assert by["question_1003"].value == "No"
@@ -67,3 +67,10 @@ def test_required_cover_letter_requested():
     f = FormField(name="cover_letter", label="Cover Letter", type=FieldType.FILE, required=True)
     answers, needs_cover = run([f])
     assert needs_cover and answers[0].value == "cover_letter"
+
+
+def test_cover_letter_policy_when_required_skips_optional():
+    fields = greenhouse.parse_form(fixture("greenhouse_questions.json"))
+    answers, needs_cover = answer_form(fields, BANK, M, FakeLLM(), "SWE", "Acme", "jd", cover_policy="when_required")
+    assert not needs_cover
+    assert next(a for a in answers if a.field == "cover_letter").value is None

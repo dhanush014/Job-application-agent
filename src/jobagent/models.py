@@ -156,12 +156,21 @@ class TailorOutput(Strict):
 # --------------------------------------------------------------------------
 
 
+class Segment(BaseModel):
+    model_config = ConfigDict(extra="forbid")  # no whitespace stripping: runs keep their spaces
+    t: str
+    b: bool = False  # bold
+
+
 class DocEntry(Strict):
     heading: str
     subheading: str = ""
     location: str = ""
     dates: str = ""
     bullets: list[str] = Field(default_factory=list)
+    # same bullets split into plain/bold runs (skills in bold); empty = all plain
+    segments: list[list[Segment]] = Field(default_factory=list)
+    ids: list[str] = Field(default_factory=list)  # master bullet id per bullet
 
 
 class SkillLine(Strict):

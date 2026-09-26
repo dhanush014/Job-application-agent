@@ -44,7 +44,7 @@
           <span class="src {% if ans.source in ('llm','llm_choice') or not ans.value %}warn{% endif %}">{{ ans.source }}{% if ans.confidence and ans.source != 'profile' %} {{ ans.confidence }}{% endif %}</span></label>
         {% if ans.note %}<div class="small" style="color:var(--warn)">{{ ans.note }}</div>{% endif %}
         {% if ans.type == FieldType.FILE %}
-          <div class="small muted">{% if ans.value == 'resume' %}Tailored resume PDF{% elif ans.value == 'cover_letter' %}Generated cover letter PDF{% else %}—{% endif %}</div>
+          <div class="small muted">{% if ans.value == 'resume' %}<a href="/a/{{ a.id }}/resume.pdf" target="_blank">Tailored resume PDF ↗</a>{% elif ans.value == 'cover_letter' %}{% if a.cover_letter_pdf %}<a href="/a/{{ a.id }}/cover.pdf" target="_blank">Cover letter PDF ↗</a>{% else %}Cover letter PDF (not rendered yet){% endif %}{% else %}—{% endif %}</div>
         {% elif ans.type == FieldType.TEXTAREA %}
           <textarea id="ans__{{ loop.index0 }}" name="ans__{{ loop.index0 }}">{{ ans.value or '' }}</textarea>
         {% elif ans.type == FieldType.MULTISELECT %}
@@ -62,9 +62,11 @@
       {% else %}
         <p class="muted">No form fields loaded.</p>
       {% endfor %}
-      {% if a.cover_letter %}
-        <label class="q" for="cover_letter">Cover letter</label>
-        <textarea id="cover_letter" name="cover_letter" style="min-height:220px">{{ a.cover_letter }}</textarea>
+      {% if a.cover_letter or has_cover %}
+        <label class="q" for="cover_letter">Cover letter
+          {% if a.cover_letter_pdf %}<a class="src" href="/a/{{ a.id }}/cover.pdf" target="_blank">PDF ↗</a>{% endif %}</label>
+        <div class="small muted">Edits here update the uploaded PDF and any cover letter text box.</div>
+        <textarea id="cover_letter" name="cover_letter" style="min-height:260px">{{ a.cover_letter or '' }}</textarea>
       {% endif %}
     </div>
   </div>

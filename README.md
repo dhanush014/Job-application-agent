@@ -25,6 +25,7 @@ The LLM never touches layout.
    - It spreads any last sliver evenly between sections. It won't do this when a thin resume would end up with huge gaps; `check-resume` tells you to add bullets instead.
 
    If the required content doesn't fit at 10pt, the type can shrink to 9.5pt.
+   Skills are **bolded** inside bullets: only skills from your master resume, preferring the ones the job asks for, at most two per bullet. Bold is dropped from any bullet where it would cause a dangling line.
 4. **Locked template.** `resume/template.typ` uses fixed fonts, margins and spacing, and treats all content as plain strings, so no markup can be injected.
 5. **Checks on the PDF itself:**
    - It has exactly one page, and the contact line and skill lines never wrap.
@@ -67,9 +68,17 @@ Example cron entry, every 2 hours from 8am to 8pm:
 0 8-20/2 * * * cd /path/to/Job-application-agent && .venv/bin/jobagent run >> data/run.log 2>&1
 ```
 
+## Cover letters
+
+By default (`apply.cover_letter: when_asked`), whenever an application form has a cover letter field, required or optional, the agent writes a 180–260 word letter from your tailored bullets and the job description.
+- For an upload field, it renders a one-page PDF with the same header as your resume.
+- For a text box, it pastes the letter in.
+
+Like everything else the LLM writes, the letter may only use facts from your profile. You can edit it in the dashboard, and the PDF is re-rendered when you save. It's stored with the application and appears in the Excel export.
+
 ## The record of every application
 
-Every application is stored with its **job description, the exact resume content sent (JSON plus the PDF), every question and answer, the cover letter, a screenshot of the confirmation page, and the date applied**.
+Every application is stored with its **job description, the exact resume content sent (JSON plus the uploaded PDF), every question and answer, the cover letter (text plus the uploaded PDF), a screenshot of the confirmation page, and the date applied**.
 - **SQLite** (default): `data/jobagent.db`. PDFs and screenshots are in `data/applications/<id>/`.
 - **Supabase** (free tier): run `supabase/schema.sql` in the SQL editor, create a private `applications` storage bucket, set `storage.backend: supabase`, and put `SUPABASE_URL` and `SUPABASE_KEY` in `.env`. PDFs are mirrored to the bucket.
 - **Excel**: `data/applications.xlsx` is rewritten after every run. You can also use `jobagent export` or the dashboard's **Export Excel** button.

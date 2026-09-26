@@ -174,8 +174,13 @@ def _is_resume(f: FormField) -> bool:
     return "resume" in f.name.lower() or re.search(r"\b(resume|cv|résumé)\b", f.label, re.I) is not None
 
 
-def _is_cover(f: FormField) -> bool:
-    return "cover" in f.name.lower() or "cover letter" in f.label.lower()
+def _is_cover(f: FormField | Answer) -> bool:
+    name = f.name if isinstance(f, FormField) else f.field
+    return "cover" in name.lower() or "cover letter" in f.label.lower()
+
+
+def is_cover_answer(a: Answer) -> bool:
+    return _is_cover(a)
 
 
 def answer_form(
@@ -186,6 +191,7 @@ def answer_form(
     job_title: str,
     company: str,
     jd: str,
+    cover_policy: str = "when_asked",
 ) -> tuple[list[Answer], bool]:
     """Returns (answers, needs_cover_letter)."""
     answers: list[Answer] = []
@@ -204,7 +210,7 @@ def answer_form(
         if f.type == FieldType.FILE:
             if _is_resume(f):
                 a.value, a.source, a.confidence = "resume", "file", 100
-            elif _is_cover(f) and f.required:
+            elif _is_cover(f) and (f.required or cover_policy == "when_asked"):
                 a.value, a.source, a.confidence = "cover_letter", "file", 100
                 needs_cover = True
             elif f.required:
@@ -221,7 +227,7 @@ def answer_form(
             continue
 
         if _is_cover(f) and f.type == FieldType.TEXTAREA:
-            if f.required:
+            if f.required or cover_policy == "when_asked":
                 a.source, a.note = "llm", "cover letter"
                 needs_cover = True
             continue
@@ -334,7 +340,8 @@ class CoverLetter(BaseModel):
 
 COVER_SYSTEM = """Write a concise cover letter (180-260 words, 3 short paragraphs, first person) for the
 candidate. Only use facts from the profile and the tailored bullets. No placeholders, no address
-block, no date; start with "Dear Hiring Team," and end with the candidate's name."""
+block, no date. Start with "Dear Hiring Team,", separate paragraphs with a blank line, and end with
+"Sincerely," followed by a newline and the candidate's name."""
 
 
 def write_cover_letter(llm: LLM, master: MasterResume, bullets: list[str], job_title: str, company: str, jd: str) -> str | None:

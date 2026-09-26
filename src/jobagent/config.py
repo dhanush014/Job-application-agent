@@ -40,6 +40,9 @@ class ApplyConfig(BaseModel):
     allow_reapply: bool = True
     reapply_after_days: int = 30
     min_answer_confidence: int = 70
+    # when_asked: write + attach a cover letter whenever the form has a cover letter field
+    # when_required: only when that field is required; never: only if required (can't skip those)
+    cover_letter: Literal["when_asked", "when_required", "never"] = "when_asked"
     browser_executable: str | None = None
     manual_finish_seconds: int = 600  # headed mode: time you get to fix + submit by hand
 

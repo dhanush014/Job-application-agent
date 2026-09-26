@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from jobagent.config import load_master
 from jobagent.models import MasterResume
-from jobagent.resume.render import build_doc, fit, render
+from jobagent.resume.render import bold_segments, build_doc, fit, render
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -97,3 +97,20 @@ def test_dangling_rewrite_is_reverted():
     bullets = [b for e in r.doc.roles for b in e.bullets]
     assert dangling not in bullets and src in bullets
     assert any("reverted 1 rewrite" in w for w in r.warnings)
+
+
+def test_bold_segments_keep_spaces_and_respect_case():
+    segs = bold_segments("Built it in Go and Kafka, then go live", ["Go", "Kafka", "Python"])
+    assert "".join(x.t for x in segs) == "Built it in Go and Kafka, then go live"
+    assert [x.t for x in segs if x.b] == ["Go", "Kafka"]  # the verb "go" stays plain
+    assert len([x for x in bold_segments("Go Kafka Rust", ["Go", "Kafka", "Rust"]) if x.b]) == 2  # max two
+
+
+def test_bold_skills_render_with_spaces_and_prefer_job_keywords():
+    m = load_master(ROOT / "profile.example/master_resume.yaml")
+    r = fit(m, [b.id for b in m.iter_bullets()], bold_priority=["Kafka"])
+    text = " ".join(r.render.text.split())
+    assert "in Go and Kafka (40K" in text
+    stripe1 = r.doc.roles[0].segments[r.doc.roles[0].ids.index("stripe-1")]
+    assert [x.t for x in stripe1 if x.b] == ["Kafka"]  # only the job's keyword, not Go
+    assert r.render.pages == 1 and not r.render.dangling()

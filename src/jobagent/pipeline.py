@@ -10,13 +10,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import policy
-from .answers import Bank, answer_form, review_reasons, write_cover_letter
+from .answers import Bank, answer_form, is_cover_answer, review_reasons, write_cover_letter
 from .apply.browser import Files, SubmitResult, Submitter
 from .config import Config
 from .discovery import fetch_all, fetch_form, make_client
 from .llm import LLM, LLMRateLimited
 from .models import Application, FieldType, Status
-from .resume.render import ResumeDoesNotFit, doc_bullets, fit, render_text_pdf, save_pdf
+from .resume.render import ResumeDoesNotFit, doc_bullets, fit, render_cover_letter, save_pdf
 from .scoring import rule_filter, score_job
 from .store import Store
 from .store.export import export_xlsx
@@ -139,7 +139,7 @@ class Pipeline:
         # 1. resume
         t = tailor(self.llm, self.master, job.description, app.jd_keywords, self.cfg.llm.max_jd_chars)
         try:
-            fr = fit(self.master, t.ranking, t.texts, t.skills)
+            fr = fit(self.master, t.ranking, t.texts, t.skills, bold_priority=t.skills + app.jd_keywords)
         except ResumeDoesNotFit as e:
             reasons.append(f"tailored resume did not fit ({e}); used master ordering")
             fr = fit(self.master, [b.id for b in self.master.iter_bullets()])
@@ -158,24 +158,15 @@ class Pipeline:
             reasons.append(f"could not load the application form schema: {e}")
         reasons += policy.check_fields(fields)
         answers, needs_cover = answer_form(
-            fields, self.bank, self.master, self.llm, job.title, job.company_name, job.description
+            fields, self.bank, self.master, self.llm, job.title, job.company_name, job.description,
+            cover_policy=self.cfg.apply.cover_letter,
         )
+        app.answers = answers
         if needs_cover:
-            text = write_cover_letter(
+            app.cover_letter = write_cover_letter(
                 self.llm, self.master, doc_bullets(fr.doc), job.title, job.company_name, job.description
             )
-            if text:
-                app.cover_letter = text
-                for a in answers:
-                    if a.type == FieldType.TEXTAREA and a.note == "cover letter":
-                        a.value, a.confidence, a.note = text, 90, ""
-                    if a.value == "cover_letter":
-                        cl = render_text_pdf(f"{self.master.contact.name} — Cover Letter", text, out_dir / "cover_letter.pdf")
-                        app.cover_letter_pdf = str(cl)
-                        self.store.upload(cl, f"{app.id}/cover_letter.pdf")
-            else:
-                reasons.append("a cover letter is required but could not be generated")
-        app.answers = answers
+            reasons += self.attach_cover_letter(app)
         reasons += review_reasons(answers, self.cfg.apply.min_answer_confidence)
 
         app.review_reasons = reasons
@@ -183,6 +174,33 @@ class Pipeline:
         app.error = None
         self.store.save(app)
         return app
+
+    def attach_cover_letter(self, app: Application) -> list[str]:
+        """Put app.cover_letter into every cover letter field: pasted into text
+        boxes, rendered to a PDF for uploads. Called again after dashboard edits."""
+        text = app.cover_letter
+        reasons = []
+        for a in app.answers:
+            if not is_cover_answer(a):
+                continue
+            if not text:
+                if a.value == "cover_letter" or a.note == "cover letter":
+                    a.value, a.note = None, "cover letter could not be generated"
+                continue
+            if a.type == FieldType.TEXTAREA and (a.note == "cover letter" or a.source == "llm"):
+                a.value, a.source, a.confidence, a.note = text, "llm", 90, ""
+            elif a.type == FieldType.FILE and a.value == "cover_letter":
+                try:
+                    pdf = render_cover_letter(
+                        self.master.contact, app.title, app.company_name, text,
+                        self.cfg.data_path / "applications" / app.id / "cover_letter.pdf",
+                    )
+                except ValueError as e:
+                    reasons.append(f"cover letter PDF: {e}")
+                    continue
+                app.cover_letter_pdf = str(pdf)
+                self.store.upload(pdf, f"{app.id}/cover_letter.pdf")
+        return reasons
 
     # ------------------------------------------------------------- submitting
 
