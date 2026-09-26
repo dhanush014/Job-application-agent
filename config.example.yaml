@@ -14,6 +14,15 @@ preferences:
   min_score: 70          # LLM fit score needed to apply (0-100)
   min_bullet_relevance: 40  # resume bullets scored below this for a job are left out
 
+# Type on the resume PDF. The fitter picks a size between min_pt and max_pt.
+# Always available: Libertinus Serif, New Computer Modern.
+# Plus any font installed on this machine (macOS: Helvetica Neue, Georgia,
+# Palatino, Charter, Avenir Next). Typst embeds it, so the PDF travels fine.
+resume:
+  font: Libertinus Serif
+  min_pt: 10.5
+  max_pt: 12.0
+
 llm:
   # Groq free tier. Check current model ids at https://console.groq.com/docs/models
   fast_model: llama-3.1-8b-instant        # scoring + multiple-choice answers

@@ -67,12 +67,13 @@ def check_resume(config: str = CONFIG):
     cfg = load_config(config)
     master = cfg.master_resume()
     Bank.from_yaml(cfg.answer_bank())
-    res = fit(master, [b.id for b in master.iter_bullets()])
+    res = fit(master, [b.id for b in master.iter_bullets()], style=cfg.resume_style())
     out = save_pdf(res.render, cfg.data_path / "master_preview.pdf")
     lay = res.doc.layout
     typer.echo(
-        f"pages={res.render.pages} content={res.natural_fill:.0%} of page, font={9.5 + 1.5 * lay.font:.1f}pt "
-        f"spacing={lay.spacing:.0%} bullets={len(res.included)} dropped={len(res.dropped)}"
+        f"pages={res.render.pages} content={res.natural_fill:.0%} of page, "
+        f"font={lay.family} {lay.point_size:.1f}pt, spacing={lay.spacing:.0%}, "
+        f"bullets={len(res.included)} dropped={len(res.dropped)}"
     )
     for w in res.warnings:
         typer.secho(f"  ! {w}", fg="yellow")

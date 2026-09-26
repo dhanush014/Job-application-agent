@@ -31,7 +31,7 @@ roles:
         text: Built a real-time fraud feature pipeline in Go and Kafka (40K events/sec), cutting feature latency from 2s to 150ms.
         skills: [Go, Kafka]
       - id: stripe-2
-        text: Led migration of the payouts ledger from MySQL to a sharded Postgres cluster with zero downtime across 12 services.
+        text: Migrated the payouts ledger from MySQL to sharded Postgres with zero downtime across 12 services.
         skills: [PostgreSQL, MySQL]
       - id: stripe-3
         text: Designed an idempotent retry framework for payment webhooks, reducing duplicate-charge incidents by 90%.
@@ -46,13 +46,13 @@ roles:
         text: Mentored 3 new-grad engineers and ran the team's design review process for 18 months.
         skills: [Mentorship]
       - id: stripe-7
-        text: Introduced OpenTelemetry tracing across payout services so p99 latency regressions surface within minutes of a deploy.
+        text: Introduced OpenTelemetry tracing so p99 latency regressions surface within minutes of a deploy.
         skills: [OpenTelemetry, Observability]
       - id: stripe-9
         text: Built a Kafka-based change-data-capture feed from the ledger that powers 4 downstream analytics teams.
         skills: [Kafka, Data Engineering]
       - id: stripe-10
-        text: Partnered with compliance to automate payout holds for sanctioned regions, removing a 2-day manual review queue.
+        text: Automated payout holds for sanctioned regions, removing a 2-day manual review queue.
         skills: [Go]
       - id: stripe-8
         text: Cut AWS spend for batch reconciliation by $400K/year by moving jobs to spot instances with checkpointing.

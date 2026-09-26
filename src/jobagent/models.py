@@ -185,9 +185,16 @@ class SkillLine(Strict):
 
 
 class Layout(Strict):
-    font: float = Field(default=1 / 3, ge=0, le=1)  # 0 = 9.5pt, 1/3 = 10pt, 1 = 11pt
+    family: str = "Libertinus Serif"  # any font installed on this machine
+    min_pt: float = Field(default=10.5, ge=6, le=20)  # smallest the fitter may go
+    max_pt: float = Field(default=12.0, ge=6, le=20)  # largest
+    font: float = Field(default=1 / 3, ge=0, le=1)  # position between min_pt and max_pt
     spacing: float = Field(default=0.0, ge=0, le=1)  # 0 = compact, 1 = airy gaps between items/sections
     stretch: bool = False  # spread any last leftover space between sections
+
+    @property
+    def point_size(self) -> float:
+        return self.min_pt + (self.max_pt - self.min_pt) * self.font
 
 
 class ResumeDoc(Strict):

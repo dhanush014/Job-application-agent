@@ -187,3 +187,14 @@ def test_shortlist_skips_low_fit_jobs(cfg, store, tmp_path):
     index, apps = p.shortlist(limit=5, out_dir=tmp_path / "s")
     assert apps == []
     assert "No jobs matched" in index.read_text()
+
+
+def test_resume_font_setting_reaches_the_pdf(cfg, store):
+    cfg.resume.font = "New Computer Modern"
+    cfg.resume.min_pt, cfg.resume.max_pt = 9.5, 11.0
+    p, _ = make(cfg, store)
+    p.run(submit=False)
+    app = next(a for a in store.list() if a.resume_json)
+    layout = app.resume_json["layout"]
+    assert layout["family"] == "New Computer Modern"
+    assert 9.5 <= layout["min_pt"] and layout["max_pt"] <= 11.0

@@ -112,7 +112,10 @@ def test_bold_skills_render_with_spaces_and_prefer_job_keywords():
     text = " ".join(r.render.text.split())
     assert "in Go and Kafka (40K" in text
     stripe1 = r.doc.roles[0].segments[r.doc.roles[0].ids.index("stripe-1")]
-    assert [x.t for x in stripe1 if x.b] == ["Kafka"]  # only the job's keyword, not Go
+    bolded = [x.t for x in stripe1 if x.b]
+    # the job's keyword, then the bullet's own tags fill the remaining slots so
+    # the line never renders completely flat
+    assert "Kafka" in bolded and "Go" in bolded
     assert r.render.pages == 1 and not r.render.dangling()
 
 
@@ -187,3 +190,39 @@ def test_job_keywords_are_bolded_even_if_not_in_skill_list_and_in_skills_section
 def test_bold_does_not_split_hyphenated_words():
     segs = bold_segments("Guide a LangGraph multi-agent system and an agent for Human-in-the-Loop review", ["agent", "Human-in-the-Loop"])
     assert [x.t for x in segs if x.b] == ["agent", "Human-in-the-Loop"]
+
+
+def test_font_family_and_size_come_from_the_style():
+    from jobagent.models import Layout
+
+    m = load_master(ROOT / "profile.example/master_resume.yaml")
+    r = fit(m, [b.id for b in m.iter_bullets()], style=Layout(family="New Computer Modern", min_pt=9.5, max_pt=11))
+    assert r.doc.layout.family == "New Computer Modern"
+    assert 9.5 <= r.doc.layout.point_size <= 11
+    assert r.render.pages == 1
+    assert "New Computer Modern" not in r.render.text  # the setting styles the page, it isn't content
+
+
+def test_every_bullet_keeps_bold_when_the_job_names_nothing_it_has():
+    """A job whose keywords appear nowhere must not produce a flat resume."""
+    m = load_master(ROOT / "profile.example/master_resume.yaml")
+    ids = [b.id for b in m.iter_bullets()]
+    unmatched = fit(m, ids, bold_priority=["Fortran", "COBOL", "Delphi"])
+    none_given = fit(m, ids, bold_priority=[])
+
+    def bolds(res):
+        return [x.t for e in res.doc.entries() for seg in e.segments for x in seg if x.b]
+
+    assert bolds(unmatched), "bullets lost all bold when the job named nothing they have"
+    assert len(bolds(unmatched)) == len(bolds(none_given))
+
+
+def test_job_keywords_win_when_there_is_only_room_for_some():
+    """Max 3 bolds per bullet: the job's terms take those slots, not the tags."""
+    segs = bold_segments(
+        "Shipped Go and Kafka and Rust and Java and Python services",
+        ["Python", "Java"] + ["Go", "Kafka", "Rust"],  # job terms first, then the bullet's tags
+    )
+    bolded = {x.t for x in segs if x.b}
+    assert {"Python", "Java"} <= bolded  # the job's terms always made the cut
+    assert len(bolded) == 3

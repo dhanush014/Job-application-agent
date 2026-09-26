@@ -156,10 +156,11 @@ class Pipeline:
                 self.master, t.ranking, t.texts, t.skills,
                 bold_priority=app.jd_keywords + t.skills,  # the job's own tool names first
                 relevance=t.relevance, min_relevance=self.cfg.preferences.min_bullet_relevance,
+                style=self.cfg.resume_style(),
             )
         except ResumeDoesNotFit as e:
             reasons.append(f"tailored resume did not fit ({e}); used master ordering")
-            fr = fit(self.master, [b.id for b in self.master.iter_bullets()])
+            fr = fit(self.master, [b.id for b in self.master.iter_bullets()], style=self.cfg.resume_style())
         hard = [w for w in fr.warnings if "pages" in w or "extractable" in w]
         reasons += [f"resume check failed: {w}" for w in hard]
         pdf = save_pdf(fr.render, out_dir / "resume.pdf")

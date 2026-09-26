@@ -1,14 +1,14 @@
 // Locked one-page resume template. The LLM never touches this file.
 // All content comes from sys.inputs.data (JSON) as plain strings (no markup injection).
 //
-// data.layout.font (0..1) sets the type size (9.5pt -> 11pt); data.layout.spacing
+// data.layout.font (0..1) sets the type size between min_pt and max_pt; data.layout.spacing
 // (0..1) opens up the gaps between bullets, entries and sections. The fitter
 // uses both to fill the page, and data.layout.stretch spreads any last sliver
 // of leftover space between sections.
 #let data = json(bytes(sys.inputs.data))
 #let f = data.layout.font
 #let sp = data.layout.spacing
-#let fs = (9.5 + 1.5 * f) * 1pt
+#let fs = (data.layout.min_pt + (data.layout.max_pt - data.layout.min_pt) * f) * 1pt
 #let k = 0.8 + 0.6 * f  // base spacing multiplier; 1.0 at the 10pt baseline
 #let lead = k * (1 + 0.3 * sp)   // line leading inside a bullet
 #let item = k * (1 + 0.9 * sp)   // between bullets
@@ -16,7 +16,7 @@
 
 #set document(title: data.contact.name + " - Resume", author: data.contact.name)
 #set page(paper: "us-letter", margin: (x: 0.5in, top: 0.45in, bottom: 0.45in))
-#set text(font: "New Computer Modern", size: fs, lang: "en", hyphenate: false)
+#set text(font: data.layout.family, size: fs, lang: "en", hyphenate: false)
 #set par(justify: false, leading: 0.48em * lead, spacing: 0.48em * item)
 #set list(indent: 0.4em, body-indent: 0.45em, spacing: 0.42em * item, marker: [•])
 

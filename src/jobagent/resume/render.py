@@ -33,10 +33,10 @@ from pypdf import PdfReader
 
 from ..models import Contact, DocEntry, Layout, MasterResume, ResumeDoc, Segment, SkillLine
 
-BASE_FONT = 1 / 3  # 10pt
-MIN_FONT = 0.0  # 9.5pt
-MAX_FONT = 1.0  # 11pt
-FONT_STEP = 1 / 15  # 0.1pt
+BASE_FONT = 1 / 3  # a third of the way from min_pt to max_pt
+MIN_FONT = 0.0
+MAX_FONT = 1.0
+FONT_STEP = 1 / 15
 SKILL_LINE_CHARS = 100  # conservative one-line budget at 10pt
 PAGE_HEIGHT_PT = 792.0
 MARGIN_PT = 0.45 * 72
@@ -154,11 +154,9 @@ def render_png(doc: ResumeDoc, ppi: int = 110) -> bytes:
         return r.compile(doc, format="png", ppi=ppi)
 
 
-def _font_pt(font: float) -> float:
-    return 9.5 + 1.5 * font
-
-
-def _skill_lines(master: MasterResume, order: list[str], font: float, bold: list[str] | None = None) -> list[SkillLine]:
+def _skill_lines(
+    master: MasterResume, order: list[str], pt: float, bold: list[str] | None = None
+) -> list[SkillLine]:
     """One line per category. The job's skills (`bold`) go first and are bolded,
     then the tailored order; whatever doesn't fit on the line is dropped."""
     pos = {s.lower(): i for i, s in enumerate(order)}
@@ -167,7 +165,7 @@ def _skill_lines(master: MasterResume, order: list[str], font: float, bold: list
     def wanted(item: str) -> bool:
         return any(_find(t, item) for t in bold)
 
-    budget_total = int(SKILL_LINE_CHARS * 10 / _font_pt(font))
+    budget_total = int(SKILL_LINE_CHARS * 10 / pt)
     lines = []
     for cat, items in master.skills.items():
         ranked = sorted(items, key=lambda s: (not wanted(s), pos.get(s.lower(), 10_000), items.index(s)))
@@ -237,9 +235,12 @@ def build_doc(
     def terms_for(b) -> list[str]:
         if no_bold and b.id in no_bold:
             return []
-        if bold_priority:  # tailoring: bold the job description's tools wherever they appear
-            return list(bold_priority)
-        return list(b.skills)  # no job: bold the bullet's own skill tags
+        # The job's own terms come first. The bullet's skill tags follow, so a
+        # bullet this job happens not to name still shows what it is about
+        # instead of rendering completely flat.
+        job = list(bold_priority or [])
+        seen = {t.lower() for t in job}
+        return job + [s for s in b.skills if s.lower() not in seen]
 
     def entry_bullets(bs):
         picked = sorted((b for b in bs if b.id in rank), key=lambda b: rank[b.id])
@@ -273,9 +274,15 @@ def build_doc(
         roles=roles,
         academic=academic,
         projects=projects,
-        skills=_skill_lines(master, skills_order or [], layout.font, bold_priority),
+        skills=_skill_lines(master, skills_order or [], layout.point_size, bold_priority),
         layout=layout,
     )
+
+
+def _layout(style: Layout | None, **kw) -> Layout:
+    """A Layout keeping the caller's font choice, with the fitter's knobs set."""
+    base = style.model_dump() if style else {}
+    return Layout(**{**base, **kw})
 
 
 def doc_bullets(doc: ResumeDoc) -> list[str]:
@@ -310,6 +317,7 @@ def fit(
     bold_priority: list[str] | None = None,
     relevance: dict[str, int] | None = None,
     min_relevance: int = 0,
+    style: Layout | None = None,
 ) -> FitResult:
     """Fit to one full page.
 
@@ -322,20 +330,20 @@ def fit(
     weak: set[str] = set()
     if relevance is not None and min_relevance > 0:
         weak = {b.id for b in master.iter_bullets() if relevance.get(b.id, 0) < min_relevance}
-    res = _fit_polished(master, ranking, texts, skills_order, bold_priority, weak)
+    res = _fit_polished(master, ranking, texts, skills_order, bold_priority, weak, style)
     if weak and res.natural_fill < MIN_FILL:
-        res = _fit_polished(master, ranking, texts, skills_order, bold_priority, set())
+        res = _fit_polished(master, ranking, texts, skills_order, bold_priority, set(), style)
         res.warnings.append("few bullets matched this job strongly; added lower-relevance ones to fill the page")
     return res
 
 
-def _fit_polished(master, ranking, texts, skills_order, bold_priority, exclude) -> FitResult:
+def _fit_polished(master, ranking, texts, skills_order, bold_priority, exclude, style=None) -> FitResult:
     texts = dict(texts or {})
     index = master.bullet_index()
     no_bold: set[str] = set()
     reverted = 0
     for _ in range(4):
-        res = _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold, exclude)
+        res = _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold, exclude, style)
         ids = doc_ids(res.doc)
         segs = [s for e in res.doc.entries() for s in e.segments]
         changed = False
@@ -362,7 +370,7 @@ def doc_ids(doc: ResumeDoc) -> list[str]:
     return [i for e in doc.entries() for i in e.ids]
 
 
-def _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold, exclude=frozenset()) -> FitResult:
+def _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold, exclude=frozenset(), style=None) -> FitResult:
     owner = master.owner_of()
     ranking = [b for b in ranking if b in owner]
     # bullets the LLM forgot about still compete, at the bottom of the ranking
@@ -384,7 +392,7 @@ def _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold, excl
         if key not in cache:
             keep = set(required) | set(optional[:n])
             doc = build_doc(master, [b for b in ranking if b in keep], texts, skills_order,
-                            Layout(font=font, spacing=spacing, stretch=stretch), bold_priority, no_bold)
+                            _layout(style, font=font, spacing=spacing, stretch=stretch), bold_priority, no_bold)
             cache[key] = (doc, render(doc))
         return cache[key]
 
@@ -393,8 +401,10 @@ def _fit_once(master, ranking, texts, skills_order, bold_priority, no_bold, excl
     if not attempt(0, base)[1].lines_ok:
         base = MIN_FONT
         if not attempt(0, base)[1].lines_ok:
+            smallest = _layout(style, font=MIN_FONT)
             raise ResumeDoesNotFit(
-                "the required content is over one page even at 9.5pt; lower min_bullets or shorten bullets"
+                f"the required content is over one page even at {smallest.point_size:.1f}pt in "
+                f"{smallest.family}; lower min_bullets, shorten bullets, or lower resume.min_pt"
             )
     lo, hi = 0, len(optional)
     while lo < hi:

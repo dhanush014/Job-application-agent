@@ -42,6 +42,17 @@ class LLMConfig(BaseModel):
     tokens_per_minute: int = 0  # 0 = no pacing; set to your Groq TPM limit (free tier: 8000)
 
 
+class ResumeConfig(BaseModel):
+    """Type on the resume PDF. Any font installed on this machine works; Typst
+    always embeds it, so the PDF looks the same for whoever opens it.
+    Always available: Libertinus Serif, New Computer Modern.
+    On macOS also e.g. Helvetica Neue, Georgia, Palatino, Charter, Avenir Next."""
+
+    font: str = "Libertinus Serif"
+    min_pt: float = 10.5  # the fitter shrinks to this at most
+    max_pt: float = 12.0  # and grows to this when there is room
+
+
 class ApplyConfig(BaseModel):
     auto_submit: bool = True  # submit READY applications without asking
     dry_run: bool = True  # fill forms but never click submit (turn off once you trust it)
@@ -80,6 +91,7 @@ class Config(BaseModel):
     profile_dir: str = "profile"
     companies_file: str = "companies.yaml"
     preferences: Preferences = Field(default_factory=Preferences)
+    resume: ResumeConfig = Field(default_factory=ResumeConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     apply: ApplyConfig = Field(default_factory=ApplyConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
@@ -101,6 +113,12 @@ class Config(BaseModel):
         """Read a YAML file, or its contents from an env var (hosted: no files)."""
         text = os.environ.get(env)
         return yaml.safe_load(text if text is not None else path.read_text()) or {}
+
+    def resume_style(self):
+        """The font settings as a Layout the renderer understands."""
+        from .models import Layout
+
+        return Layout(family=self.resume.font, min_pt=self.resume.min_pt, max_pt=self.resume.max_pt)
 
     def master_resume(self) -> MasterResume:
         data = self._yaml("JOBAGENT_MASTER_RESUME", self.path(self.profile_dir) / "master_resume.yaml")
