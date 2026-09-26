@@ -19,6 +19,12 @@ llm:
   fast_model: llama-3.1-8b-instant        # scoring + multiple-choice answers
   smart_model: llama-3.3-70b-versatile    # resume tailoring + written answers
   temperature: 0.2
+  # Reasoning models (gpt-oss, qwen3) think before answering and can spend their
+  # whole output budget thinking, returning nothing. Keep thinking short and
+  # leave room for the answer:
+  reasoning_effort: low      # low | medium | high | none | null (don't send it)
+  max_completion_tokens: 4000
+  tokens_per_minute: 0       # set to your Groq limit (free tier is often 8000); `jobagent check-llm` prints it
 
 apply:
   auto_submit: true        # submit everything that passes the gates, no approval

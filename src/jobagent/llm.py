@@ -1,4 +1,10 @@
-"""Thin Groq wrapper: JSON-mode calls validated against pydantic schemas."""
+"""Thin Groq wrapper: JSON calls validated against pydantic schemas.
+
+Groq's line-up includes reasoning models (gpt-oss, qwen3) that think before
+answering. Two things bite there and are handled here: they can spend the whole
+output budget thinking and return nothing, and the free tier's tokens-per-minute
+cap is small enough that one big prompt can exhaust it.
+"""
 
 from __future__ import annotations
 
@@ -23,6 +29,12 @@ class LLMRateLimited(RuntimeError):
     """Raised when Groq keeps returning 429 (usually the free daily cap)."""
 
 
+class LLMEmptyReply(RuntimeError):
+    """The model returned no content. On a reasoning model this means it spent
+    the whole output budget thinking: raise max_completion_tokens, lower
+    reasoning_effort, or pick a non-reasoning model."""
+
+
 class LLM(Protocol):
     def json(self, tier: Tier, system: str, user: str, schema: type[T]) -> T: ...
 
@@ -40,15 +52,38 @@ class GroqLLM:
         self.client = client
         self.tokens_used = 0
         self._no_json_mode: set[str] = set()  # models whose strict JSON mode keeps failing
+        self._no_reasoning_effort: set[str] = set()  # models that reject the parameter
+        self._minute: list[tuple[float, int]] = []  # (time, tokens) spent, for pacing
 
     def _model(self, tier: Tier) -> str:
         return self.cfg.smart_model if tier == "smart" else self.cfg.fast_model
 
+    def _pace(self, need: int) -> None:
+        """Wait, if needed, to stay under tokens_per_minute. Groq's free tier is
+        tight, and going over costs a 429 plus a long blind retry."""
+        limit = self.cfg.tokens_per_minute
+        if not limit:
+            return
+        while self._minute:
+            cutoff = time.time() - 60
+            self._minute = [(t, n) for t, n in self._minute if t > cutoff]
+            if not self._minute or sum(n for _, n in self._minute) + need <= limit:
+                return
+            wait = min(60.0, max(1.0, 60 - (time.time() - self._minute[0][0])))
+            log.info("pacing for Groq's %d tokens/min limit: waiting %.0fs", limit, wait)
+            time.sleep(wait)
+
     def _complete(self, model: str, messages: list[dict]) -> str:
         import groq
 
+        estimate = sum(len(m["content"]) for m in messages) // 4 + 600
         for attempt in range(3):
-            kwargs = {} if model in self._no_json_mode else {"response_format": {"type": "json_object"}}
+            kwargs: dict = {"max_completion_tokens": self.cfg.max_completion_tokens}
+            if model not in self._no_json_mode:
+                kwargs["response_format"] = {"type": "json_object"}
+            if self.cfg.reasoning_effort and model not in self._no_reasoning_effort:
+                kwargs["reasoning_effort"] = self.cfg.reasoning_effort
+            self._pace(estimate)
             try:
                 resp = self.client.chat.completions.create(
                     model=model,
@@ -56,13 +91,25 @@ class GroqLLM:
                     temperature=self.cfg.temperature,
                     **kwargs,
                 )
-                if resp.usage:
-                    self.tokens_used += resp.usage.total_tokens
-                return resp.choices[0].message.content or ""
+                used = resp.usage.total_tokens if resp.usage else estimate
+                self.tokens_used += used
+                self._minute.append((time.time(), used))
+                text = resp.choices[0].message.content or ""
+                if text.strip():
+                    return text
+                raise LLMEmptyReply(
+                    f"{model} returned no content{_thinking_note(resp)}. "
+                    "Raise llm.max_completion_tokens, set llm.reasoning_effort: none, "
+                    "or pick a non-reasoning model."
+                )
             except groq.BadRequestError as e:
-                # Some models (e.g. reasoning models) fail Groq's strict JSON mode
-                # with a 400; ask again without it and extract the JSON ourselves.
-                if kwargs and _is_json_mode_error(e):
+                # Some models reject strict JSON mode or reasoning_effort with a
+                # 400. Drop the offending parameter, remember it, and try again.
+                if "reasoning_effort" in kwargs and _rejects(e, "reasoning_effort"):
+                    log.warning("%s rejects reasoning_effort; dropping it", model)
+                    self._no_reasoning_effort.add(model)
+                    continue
+                if "response_format" in kwargs and _is_json_mode_error(e):
                     log.warning("%s failed JSON mode; retrying without it", model)
                     self._no_json_mode.add(model)
                     continue
@@ -99,6 +146,19 @@ class GroqLLM:
                     },
                 ]
         raise ValueError(f"LLM returned invalid JSON for {schema.__name__}: {last_err}")
+
+
+def _thinking_note(resp) -> str:
+    """" after spending N tokens thinking", when that is what happened."""
+    try:
+        n = resp.usage.completion_tokens_details.reasoning_tokens
+        return f" after spending {n} tokens thinking" if n else ""
+    except Exception:
+        return ""
+
+
+def _rejects(e, param: str) -> bool:
+    return param in str(e)
 
 
 def _is_json_mode_error(e) -> bool:

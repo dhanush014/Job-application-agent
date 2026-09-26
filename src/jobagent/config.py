@@ -34,6 +34,12 @@ class LLMConfig(BaseModel):
     smart_model: str = "llama-3.3-70b-versatile"  # tailoring, written answers
     temperature: float = 0.2
     max_jd_chars: int = 7000
+    # Reasoning models (gpt-oss, qwen3) think before answering and can burn the
+    # whole output budget on thinking, returning nothing. "low" keeps them brief;
+    # "none" disables thinking on models that allow it; None = don't send it.
+    reasoning_effort: str | None = "low"
+    max_completion_tokens: int = 4000  # room for thinking AND the answer
+    tokens_per_minute: int = 0  # 0 = no pacing; set to your Groq TPM limit (free tier: 8000)
 
 
 class ApplyConfig(BaseModel):

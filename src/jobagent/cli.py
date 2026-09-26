@@ -102,15 +102,33 @@ def check_llm(config: str = CONFIG):
         typer.secho(f"could not list models: {e}", fg="yellow")
     failed = False
     for tier, model in (("fast", cfg.llm.fast_model), ("smart", cfg.llm.smart_model)):
+        before = llm.tokens_used
         try:
             out = llm.json(tier, "Reply as instructed.", 'Return {"ok": true, "word": "hello"}.', Ping)
-            typer.secho(f"  {tier} model {model}: OK ({out.word})", fg="green")
+            typer.secho(f"  {tier} model {model}: OK ({out.word}, {llm.tokens_used - before} tokens)", fg="green")
         except Exception as e:
             failed = True
-            typer.secho(f"  {tier} model {model}: FAILED - {type(e).__name__}: {str(e)[:200]}", fg="red")
+            typer.secho(f"  {tier} model {model}: FAILED - {type(e).__name__}: {str(e)[:300]}", fg="red")
+        if limit := _tpm_limit(llm, model):
+            typer.echo(f"      Groq allows {limit} tokens/min for this model", nl=False)
+            if cfg.llm.tokens_per_minute:
+                typer.echo(f" (config paces at {cfg.llm.tokens_per_minute})")
+            else:
+                typer.secho(f" — set llm.tokens_per_minute: {limit} in config.yaml to avoid 429s", fg="yellow")
     if failed:
         typer.echo("Pick working model ids from the list above for llm.fast_model / llm.smart_model in config.yaml.")
         raise typer.Exit(1)
+
+
+def _tpm_limit(llm, model: str) -> int | None:
+    """Groq reports the per-minute token budget in a response header."""
+    try:
+        raw = llm.client.chat.completions.with_raw_response.create(
+            model=model, messages=[{"role": "user", "content": "hi"}], max_completion_tokens=1
+        )
+        return int(raw.headers.get("x-ratelimit-limit-tokens", 0)) or None
+    except Exception:
+        return None
 
 
 @app.command()
