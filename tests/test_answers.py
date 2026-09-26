@@ -74,3 +74,17 @@ def test_cover_letter_policy_when_required_skips_optional():
     answers, needs_cover = answer_form(fields, BANK, M, FakeLLM(), "SWE", "Acme", "jd", cover_policy="when_required")
     assert not needs_cover
     assert next(a for a in answers if a.field == "cover_letter").value is None
+
+
+def test_salary_uses_posted_range_else_default():
+    from jobagent.answers import posted_salary
+
+    assert posted_salary("Base pay $140,000 - $180,000") == "$140,000 – $180,000"
+    assert posted_salary("Compensation: $150K – $200K • Offers Equity") == "$150,000 – $200,000"
+    assert posted_salary("$55/hr, $1,000 - $2,000 signing bonus") is None
+    bank = Bank.from_yaml({"questions": [{"match": ["salary expectations"], "answer": "$120,000", "use_posted_salary": True}]})
+    f = FormField(name="sal", label="What are your salary expectations?", type=FieldType.TEXT, required=True)
+    with_range, _ = answer_form([f], bank, M, FakeLLM(), "SWE", "Acme", "Pay range: $130,000 - $170,000")
+    without, _ = answer_form([f], bank, M, FakeLLM(), "SWE", "Acme", "No pay info.")
+    assert with_range[0].value == "$130,000 – $170,000"
+    assert without[0].value == "$120,000"

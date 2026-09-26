@@ -37,3 +37,11 @@ def test_fetch_all_survives_broken_board():
     cs = [Company(ats="greenhouse", slug="acme"), Company(ats="greenhouse", slug="acme")]
     client = mock_http()
     assert len(fetch_all(client, cs)) == 4
+
+
+def test_ashby_compensation_is_added_to_description():
+    data = {"jobs": [{"id": "1", "title": "AI Engineer", "location": "NYC", "jobUrl": "u", "applyUrl": "a",
+                      "descriptionPlain": "Build agents.",
+                      "compensation": {"compensationTierSummary": "$150K – $200K • Offers Equity"}}]}
+    job = ashby.parse_jobs(data, "x", "X")[0]
+    assert job.description.endswith("Compensation: $150K – $200K • Offers Equity")

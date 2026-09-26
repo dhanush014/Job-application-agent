@@ -54,6 +54,10 @@ def parse_jobs(data: dict, org: str, name: str) -> list[Job]:
         if j.get("isListed") is False:
             continue
         jid = str(j["id"])
+        description = j.get("descriptionPlain") or html_to_text(j.get("descriptionHtml"))
+        comp = (j.get("compensation") or {}).get("compensationTierSummary")
+        if comp:  # e.g. "$150K – $200K • Offers Equity"; lets salary answers use the posted range
+            description = f"{description}\n\nCompensation: {comp}"
         jobs.append(
             Job(
                 ats="ashby",
@@ -64,7 +68,7 @@ def parse_jobs(data: dict, org: str, name: str) -> list[Job]:
                 location=j.get("location") or "",
                 url=j.get("jobUrl") or f"https://jobs.ashbyhq.com/{org}/{jid}",
                 apply_url=j.get("applyUrl") or apply_url(org, jid),
-                description=j.get("descriptionPlain") or html_to_text(j.get("descriptionHtml")),
+                description=description,
                 posted_at=j.get("publishedAt"),
                 remote=j.get("isRemote"),
                 employment_type=j.get("employmentType"),

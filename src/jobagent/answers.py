@@ -59,6 +59,28 @@ def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", " ", s.lower())).strip()
 
 
+_MONEY = r"\$\s?\d{2,3}(?:,\d{3})*(?:\.\d+)?\s?[kK]?"
+_RANGE = re.compile(rf"({_MONEY})\s*(?:-|–|—|to)\s*({_MONEY})")
+
+
+def posted_salary(jd: str) -> str | None:
+    """The salary range stated in a job description, e.g. '$140,000 – $180,000'."""
+    for lo, hi in _RANGE.findall(jd or ""):
+        vals = [_dollars(lo), _dollars(hi)]
+        if all(v and 30_000 <= v <= 1_000_000 for v in vals) and vals[0] <= vals[1]:
+            return f"${vals[0]:,} – ${vals[1]:,}"
+    return None
+
+
+def _dollars(s: str) -> int | None:
+    s = s.replace("$", "").replace(",", "").strip()
+    mult = 1000 if s[-1:] in "kK" else 1
+    try:
+        return int(float(s.rstrip("kK").strip()) * mult)
+    except ValueError:
+        return None
+
+
 def pick_option(answer: str, options: list[Option]) -> Option | None:
     if not options:
         return None
@@ -234,7 +256,10 @@ def answer_form(
 
         entry, score = bank.match(f)
         if entry is not None:
-            _apply_bank(a, f, entry["answer"], score)
+            answer = entry["answer"]
+            if entry.get("use_posted_salary") and (posted := posted_salary(jd)):
+                answer = posted  # the posting's own range beats your default number
+            _apply_bank(a, f, answer, score)
             continue
 
         if a.sensitive:

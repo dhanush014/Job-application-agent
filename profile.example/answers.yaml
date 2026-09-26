@@ -27,7 +27,8 @@ questions:
   - match: ["willing to relocate", "open to relocation", "relocate"]
     answer: "Yes"
   - match: ["salary expectation", "expected salary", "desired compensation", "compensation expectation", "salary requirements"]
-    answer: "Open to discussing; targeting a competitive offer for the level and location"
+    answer: "$120,000"
+    use_posted_salary: true   # if the posting states a range, answer with that range instead
   - match: ["notice period", "earliest start date", "when can you start", "start date"]
     answer: "Two weeks after accepting an offer"
   - match: ["how did you hear", "where did you hear", "how did you find"]
