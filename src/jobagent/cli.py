@@ -78,6 +78,41 @@ def check_resume(config: str = CONFIG):
     typer.echo(f"preview: {out}")
 
 
+@app.command("check-llm")
+def check_llm(config: str = CONFIG):
+    """Test the configured Groq models with a tiny JSON request and list available models."""
+    from pydantic import BaseModel
+
+    from .llm import GroqLLM
+
+    class Ping(BaseModel):
+        ok: bool
+        word: str
+
+    cfg = load_config(config)
+    try:
+        llm = GroqLLM(cfg.llm)
+    except RuntimeError as e:
+        typer.secho(f"setup error: {e}", fg="red")
+        raise typer.Exit(1)
+    try:
+        ids = sorted(m.id for m in llm.client.models.list().data)
+        typer.echo("models on your Groq account: " + ", ".join(ids))
+    except Exception as e:
+        typer.secho(f"could not list models: {e}", fg="yellow")
+    failed = False
+    for tier, model in (("fast", cfg.llm.fast_model), ("smart", cfg.llm.smart_model)):
+        try:
+            out = llm.json(tier, "Reply as instructed.", 'Return {"ok": true, "word": "hello"}.', Ping)
+            typer.secho(f"  {tier} model {model}: OK ({out.word})", fg="green")
+        except Exception as e:
+            failed = True
+            typer.secho(f"  {tier} model {model}: FAILED - {type(e).__name__}: {str(e)[:200]}", fg="red")
+    if failed:
+        typer.echo("Pick working model ids from the list above for llm.fast_model / llm.smart_model in config.yaml.")
+        raise typer.Exit(1)
+
+
 @app.command()
 def discover(config: str = CONFIG, verbose: bool = False):
     """Fetch jobs from every company in companies.yaml."""

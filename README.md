@@ -61,6 +61,8 @@ jobagent run                           # dry run by default: fills forms, never 
 jobagent serve                         # dashboard at http://127.0.0.1:8000
 ```
 
+Groq's model line-up changes over time. If a run fails with a model error, run `jobagent check-llm`: it lists the models on your account and tests the two in `config.yaml`. Models that can't do strict JSON mode still work — the agent retries without it and extracts the JSON itself.
+
 **Try it on two jobs first.** Pick two postings you like (Greenhouse or Ashby links) and run:
 ```bash
 jobagent try https://job-boards.greenhouse.io/<company>/jobs/<id> https://jobs.ashbyhq.com/<company>/<id>

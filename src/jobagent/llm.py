@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from typing import Literal, Protocol, TypeVar
 
@@ -38,6 +39,7 @@ class GroqLLM:
             client = Groq(api_key=key, max_retries=4)
         self.client = client
         self.tokens_used = 0
+        self._no_json_mode: set[str] = set()  # models whose strict JSON mode keeps failing
 
     def _model(self, tier: Tier) -> str:
         return self.cfg.smart_model if tier == "smart" else self.cfg.fast_model
@@ -46,16 +48,25 @@ class GroqLLM:
         import groq
 
         for attempt in range(3):
+            kwargs = {} if model in self._no_json_mode else {"response_format": {"type": "json_object"}}
             try:
                 resp = self.client.chat.completions.create(
                     model=model,
                     messages=messages,
                     temperature=self.cfg.temperature,
-                    response_format={"type": "json_object"},
+                    **kwargs,
                 )
                 if resp.usage:
                     self.tokens_used += resp.usage.total_tokens
                 return resp.choices[0].message.content or ""
+            except groq.BadRequestError as e:
+                # Some models (e.g. reasoning models) fail Groq's strict JSON mode
+                # with a 400; ask again without it and extract the JSON ourselves.
+                if kwargs and _is_json_mode_error(e):
+                    log.warning("%s failed JSON mode; retrying without it", model)
+                    self._no_json_mode.add(model)
+                    continue
+                raise
             except groq.RateLimitError as e:
                 wait = _retry_after(e)
                 if wait is None or wait > 120 or attempt == 2:
@@ -77,7 +88,7 @@ class GroqLLM:
         for _ in range(3):
             text = self._complete(self._model(tier), messages)
             try:
-                return schema.model_validate_json(text)
+                return schema.model_validate_json(extract_json(text))
             except ValidationError as e:
                 last_err = e
                 messages += [
@@ -88,6 +99,23 @@ class GroqLLM:
                     },
                 ]
         raise ValueError(f"LLM returned invalid JSON for {schema.__name__}: {last_err}")
+
+
+def _is_json_mode_error(e) -> bool:
+    text = str(e).lower()
+    return any(k in text for k in ("json_validate_failed", "json mode", "response_format", "failed to generate json"))
+
+
+def extract_json(text: str) -> str:
+    """The JSON object inside a reply that may add code fences or prose around it."""
+    t = text.strip()
+    if t.startswith("{"):
+        return t
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", t, re.S)
+    if fenced:
+        return fenced.group(1)
+    start, end = t.find("{"), t.rfind("}")
+    return t[start : end + 1] if start != -1 and end > start else t
 
 
 def _retry_after(e) -> float | None:
